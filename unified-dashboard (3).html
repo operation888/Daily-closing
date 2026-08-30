@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Branch Operations Dashboard</title>
+<style>
+  :root{
+    --green:#1F3B2C; --green-deep:#122419; --beige:#F6F1E4; --beige-2:#EAE1C6;
+    --accent:#8A7B4E; --accent-light:#C9B584; --alert:#7A2E2E; --alert-bg:#F1E1DD;
+    --ok:#2E5C43; --ok-bg:#E3ECE3; --pending:#8A6D1F; --pending-bg:#F3ECD6;
+    --line:#D9CDA9; --ink-soft:#5C5540;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--beige);color:var(--green);font-family:Georgia,'Times New Roman',serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 0 60px;}
+  header{background:var(--green);color:var(--beige);padding:28px 24px 34px;position:relative;overflow:hidden;}
+  header::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,var(--accent-light) 0%, transparent 70%);opacity:.30;}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-light);font-weight:700;margin-bottom:6px;}
+  h1{font-size:26px;margin:0 0 6px;line-height:1.1;}
+  header p{margin:0;color:var(--beige-2);font-size:14px;max-width:600px;}
+
+  #loginOverlay{position:fixed;inset:0;background:var(--green);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .login-card{background:var(--beige);border-radius:16px;padding:34px 28px;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);text-align:center;}
+  .login-card h2{font-size:22px;margin:0 0 4px;color:var(--green);}
+  .login-card p.sub{font-size:13px;color:var(--ink-soft);margin:0 0 22px;}
+  .login-card label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;text-align:left;}
+  .login-card input{width:100%;border:1.5px solid var(--line);background:var(--beige-2);border-radius:10px;padding:11px 12px;font-size:14.5px;font-family:Georgia,serif;color:var(--green);margin-bottom:14px;outline:none;}
+  .login-card input:focus{border-color:var(--accent);}
+  .login-btn{width:100%;background:var(--green);color:var(--beige);border:none;border-radius:10px;padding:13px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:Georgia,serif;}
+  .login-btn:hover{background:var(--green-deep);}
+  .login-error{display:none;background:var(--alert-bg);color:var(--alert);border:1px solid #D9B9B4;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
+  .login-error.show{display:block;}
+  #branchApp,#managerApp,#adminApp{display:none;}
+
+  .session-bar{display:flex;align-items:center;justify-content:space-between;background:var(--green-deep);color:var(--beige-2);padding:9px 16px;font-size:12.5px;flex-wrap:wrap;gap:6px;}
+  .session-bar button{background:transparent;border:1px solid var(--beige-2);color:var(--beige-2);border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:Georgia,serif;}
+  .session-bar button:hover{background:var(--beige-2);color:var(--green-deep);}
+
+  .card{background:#fff;margin:-18px 16px 18px;border-radius:16px;box-shadow:0 10px 30px rgba(31,59,44,.10);border:1px solid var(--line);overflow:visible;position:relative;z-index:1;padding:20px 22px;}
+  .card h3{margin:0 0 4px;font-size:16px;color:var(--accent);}
+  .card p.hint{margin:0 0 16px;font-size:12.5px;color:var(--ink-soft);}
+
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+  .row.three{grid-template-columns:1fr 1fr 1fr;}
+  .row.single{grid-template-columns:1fr;}
+  @media(max-width:640px){.row,.row.three{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;}
+  input[type=text],input[type=number],input[type=date],input[type=password],select,textarea{
+    width:100%;border:1.5px solid var(--line);background:var(--beige-2);border-radius:10px;
+    padding:10px 12px;font-size:14.5px;font-family:Georgia,serif;color:var(--green);outline:none;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+  input[readonly]{background:var(--ok-bg);color:var(--ok);font-weight:700;}
+
+  button.primary{background:var(--green);color:var(--beige);border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;font-family:Georgia,serif;}
+  button.primary:hover{background:var(--green-deep);}
+  button.secondary{background:#fff;border:1.5px solid var(--line);color:var(--green);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Georgia,serif;}
+  button.secondary:hover{border-color:var(--accent);}
+  button.danger{background:var(--alert);color:#fff;border:none;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Georgia,serif;}
+  button.danger:hover{opacity:.9;}
+  button.danger:disabled,button.primary:disabled{opacity:.5;cursor:not-allowed;}
+
+  .shift-banner{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;}
+  .shift-pill{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;flex:1;min-width:110px;text-align:center;}
+  .shift-pill span{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:3px;}
+
+  .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .status-badge.not-opened{background:var(--alert-bg);color:var(--alert);}
+  .status-badge.open{background:var(--pending-bg);color:var(--pending);}
+  .status-badge.closed{background:var(--ok-bg);color:var(--ok);}
+  .status-badge.Pending{background:var(--pending-bg);color:var(--pending);}
+  .status-badge.Done{background:var(--ok-bg);color:var(--ok);}
+
+  .step-block{border:1px dashed var(--line);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .step-block.locked{opacity:.5;pointer-events:none;}
+  .step-title{font-size:13px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+  .step-num{background:var(--green);color:var(--beige);width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
+
+  .ref-box{background:var(--beige-2);border:1px dashed var(--line);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:12.5px;}
+  .ref-box strong{color:var(--accent);}
+  .ref-row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:4px 0;border-bottom:1px dashed var(--line);}
+  .ref-row:last-child{border-bottom:none;}
+
+  .preview-box{background:var(--ok-bg);border-radius:12px;padding:14px 16px;margin-bottom:16px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;text-align:center;}
+  @media(max-width:640px){.preview-box{grid-template-columns:repeat(2,1fr);}}
+  .preview-item span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);margin-bottom:3px;}
+  .preview-item strong{font-size:15px;color:var(--ok);}
+
+  .tabs{display:flex;gap:8px;margin:0 16px 14px;flex-wrap:wrap;}
+  .tab-btn{background:#fff;border:1.5px solid var(--line);color:var(--green);border-radius:10px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:Georgia,serif;}
+  .tab-btn.active{background:var(--green);color:var(--beige);border-color:var(--green);}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+
+  .admin-filters{display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap;}
+  .admin-filters select,.admin-filters input{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;font-size:13px;font-family:Georgia,serif;color:var(--green);width:auto;}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{background:var(--green);color:var(--beige);text-align:left;padding:8px 9px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
+  td{padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  tr:last-child td{border-bottom:none;}
+  .link-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;font-weight:700;text-decoration:underline;font-family:Georgia,serif;}
+  .link-btn.del{color:var(--alert);}
+  .pos{color:var(--ok);font-weight:700;}
+  .neg{color:var(--alert);font-weight:700;}
+
+  .empty{text-align:center;padding:40px 20px;color:var(--ink-soft);font-size:13.5px;}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--green);color:var(--beige);padding:13px 20px;border-radius:10px;font-size:13.5px;font-weight:700;box-shadow:0 12px 30px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:all .25s;z-index:50;max-width:90%;text-align:center;}
+  .toast.show{opacity:1;transform:translate(-50%,0);}
+  .toast.err{background:var(--alert);}
+  .config-hint{margin:14px 16px 0;font-size:12px;color:var(--ink-soft);background:#fff;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;}
+  .config-hint code{background:var(--beige-2);padding:1px 5px;border-radius:4px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(18,36,25,.55);display:none;align-items:center;justify-content:center;z-index:200;padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:#fff;border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
+  .modal-box h3{margin-top:0;}
+</style>
+</head>
+<body>
+
+<!-- ===================== SINGLE LOGIN ===================== -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <h2>Branch Operations</h2>
+    <p class="sub">Sign in — the dashboard will open automatically based on your account.</p>
+    <div class="login-error" id="loginError">Incorrect username or password.</div>
+    <form id="loginForm">
+      <label>Username</label>
+      <input type="text" id="loginUser" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+      <label>Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password" required>
+      <button type="submit" class="login-btn">Sign In</button>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== BRANCH / CASHIER APP ===================== -->
+<div id="branchApp">
+  <div class="session-bar">
+    <span>Logged in as: <strong id="sessionBranchName">—</strong></span>
+    <button type="button" id="branchLogoutBtn">Log Out</button>
+  </div>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Branch Portal</div>
+      <h1>Till Opening &amp; Closing</h1>
+      <p>Open the till at the start of the shift and close it at the end. Everything is timestamped automatically.</p>
+    </header>
+
+    <div class="card">
+      <h3>Current Shift — <span id="currentBranchLabel"></span></h3>
+      <p class="hint">Business day runs 3:00 AM to 3:00 AM. Shifts are auto-detected from the current time.</p>
+
+      <div class="shift-banner">
+        <div class="shift-pill"><span>Business Date</span><span id="bizDateShow">-</span></div>
+        <div class="shift-pill"><span>Shift</span><span id="shiftShow">-</span></div>
+        <div class="shift-pill"><span>Status</span><span id="statusShow">-</span></div>
+      </div>
+
+      <div class="step-block" id="stepOpenBlock">
+        <div class="step-title"><span class="step-num">1</span> Open Till</div>
+        <div id="openForm">
+          <div class="row">
+            <div><label>Your Name</label><input type="text" id="openByName" placeholder="e.g. Ahmed"></div>
+            <div><label>Opening Cash (Riyal)</label><input type="number" step="any" id="openingCashInput" placeholder="e.g. 1000"></div>
+          </div>
+          <button type="button" class="primary" id="saveOpenBtn">Open Till</button>
+        </div>
+        <div id="openDisplay" style="display:none;">
+          <div class="row">
+            <div><label>Opened By</label><input type="text" id="openedByShow" readonly></div>
+            <div><label>Opening Cash</label><input type="text" id="openingCashShow" readonly></div>
+          </div>
+          <p class="hint" id="openTimeShow"></p>
+        </div>
+      </div>
+
+      <div class="step-block locked" id="stepCloseBlock">
+        <div class="step-title"><span class="step-num">2</span> Close Till</div>
+        <p class="hint" style="margin-top:-4px;">Count all cash physically in the drawer right now and enter the total. This becomes the final closing amount and cannot be edited afterwards.</p>
+        <div class="row">
+          <div><label>Closed By</label><input type="text" id="closeByName" placeholder="e.g. Ahmed"></div>
+          <div><label>Final Cash Count (Riyal)</label><input type="number" step="any" id="closingCashInput" placeholder="e.g. 1300"></div>
+        </div>
+        <div class="row single">
+          <div><label>Notes (optional)</label><input type="text" id="closeNotes" placeholder="e.g. short by 5, receipt attached"></div>
+        </div>
+        <button type="button" class="danger" id="closeBtn">Close Till</button>
+      </div>
+
+      <div id="closedDisplay" style="display:none;">
+        <div class="row">
+          <div><label>Closed By</label><input type="text" id="closedByShow" readonly></div>
+          <div><label>Final Closing Cash</label><input type="text" id="closingCashShow" readonly></div>
+        </div>
+        <p class="hint" id="closeTimeShow"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>All Branches Report</h3>
+      <p class="hint">Live data from every branch.</p>
+      <div class="admin-filters" style="margin:0 0 14px;">
+        <select id="staffBranchFilter"><option value="">All branches</option></select>
+        <input type="date" id="staffDateFilter">
+      </div>
+      <div class="table-wrap">
+        <table id="staffReportTable">
+          <thead><tr>
+            <th>Branch</th><th>Date</th><th>Shift</th><th>Status</th>
+            <th>Opened By</th><th>Opening Cash</th>
+            <th>Closed By</th><th>Closing Cash</th>
+            <th>Close Time</th><th>Notes</th>
+          </tr></thead>
+          <tbody id="staffReportBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="staffReportEmpty" style="display:none;">No records found.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== AREA MANAGER APP ===================== -->
+<div id="managerApp">
+  <div class="session-bar">
+    <span>Logged in as: <strong id="sessionManagerName">—</strong></span>
+    <button type="button" id="managerLogoutBtn">Log Out</button>
+  </div>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Area Manager Portal</div>
+      <h1>Cash Collection Entry</h1>
+      <p>Select branch and date, check the Foodics report figures against what you actually collected — the app calculates More/Short automatically.</p>
+    </header>
+
+    <div class="card">
+      <h3>New Collection Entry</h3>
+      <p class="hint">Fields marked with * are required.</p>
+      <div class="row">
+        <div><label>Date *</label><input type="date" id="cDate"></div>
+        <div><label>Branch *</label><select id="cBranch"><option value="">Select branch</option></select></div>
+      </div>
+
+      <div class="ref-box" id="tillRefBox">
+        <strong>Till Closing Reference</strong>
+        <div id="tillRefContent" style="margin-top:8px;color:var(--ink-soft);">Select a branch and date to see till closing records.</div>
+      </div>
+
+      <div class="row">
+        <div><label>Foodics Cash Report (Riyal) *</label><input type="number" step="any" id="cFoodicsCash" placeholder="e.g. 926.5"></div>
+        <div><label>Foodics ATM Report (Riyal) *</label><input type="number" step="any" id="cFoodicsATM" placeholder="e.g. 0"></div>
+      </div>
+      <div class="row">
+        <div><label>Actual Cash Collected (Riyal) *</label><input type="number" step="any" id="cActualCash" placeholder="e.g. 916"></div>
+        <div><label>Actual ATM Collected (Riyal) *</label><input type="number" step="any" id="cActualATM" placeholder="e.g. 27"></div>
+      </div>
+
+      <div class="preview-box">
+        <div class="preview-item"><span>More Cash</span><strong id="pvMoreCash">0</strong></div>
+        <div class="preview-item"><span>More ATM</span><strong id="pvMoreATM">0</strong></div>
+        <div class="preview-item"><span>Short Cash</span><strong id="pvShortCash">0</strong></div>
+        <div class="preview-item"><span>Short ATM</span><strong id="pvShortATM">0</strong></div>
+        <div class="preview-item"><span>Total</span><strong id="pvTotal">0</strong></div>
+      </div>
+
+      <div class="row single">
+        <div><label>Note (optional)</label><input type="text" id="cNote" placeholder="Any remarks..."></div>
+      </div>
+
+      <button type="button" class="primary" id="submitCollectionBtn">Submit Collection</button>
+    </div>
+
+    <div class="card">
+      <h3>All Collections Report</h3>
+      <p class="hint">Live data from every branch.</p>
+      <div class="admin-filters">
+        <select id="mgrBranchFilter"><option value="">All branches</option></select>
+        <input type="date" id="mgrDateFilter">
+      </div>
+      <div class="table-wrap">
+        <table id="mgrReportTable">
+          <thead><tr>
+            <th>Date</th><th>Branch</th><th>Cash Collected</th><th>Who Collected</th>
+            <th>Finance Status</th><th>More Cash</th><th>More ATM</th><th>Short Cash</th>
+            <th>Short ATM</th><th>Total</th><th>Note</th>
+          </tr></thead>
+          <tbody id="mgrReportBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="mgrReportEmpty" style="display:none;">No records found.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ADMIN APP ===================== -->
+<div id="adminApp">
+  <div class="session-bar">
+    <span>Logged in as: <strong>Admin</strong></span>
+    <button type="button" id="adminLogoutBtn">Log Out</button>
+  </div>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Admin Portal</div>
+      <h1>Full Operations Dashboard</h1>
+      <p>Till closing, cash collections, area manager accounts and activity — all in one place.</p>
+    </header>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-tab="tabTill">Till Closing</button>
+      <button type="button" class="tab-btn" data-tab="tabCollections">Cash Collections</button>
+      <button type="button" class="tab-btn" data-tab="tabManagers">Area Managers</button>
+      <button type="button" class="tab-btn" data-tab="tabActivity">Activity Log</button>
+    </div>
+
+    <div class="tab-panel active card" id="tabTill">
+      <h3>All Till Closing Records</h3>
+      <div class="admin-filters">
+        <select id="adminTillBranchFilter"><option value="">All branches</option></select>
+        <input type="date" id="adminTillDateFilter">
+        <button type="button" class="secondary" id="clearTillFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="adminTillTable">
+          <thead><tr>
+            <th>Branch</th><th>Date</th><th>Shift</th><th>Status</th>
+            <th>Opened By</th><th>Opening Cash</th>
+            <th>Closed By</th><th>Closing Cash</th>
+            <th>Close Time</th><th>Notes</th><th></th>
+          </tr></thead>
+          <tbody id="adminTillBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="adminTillEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabCollections">
+      <h3>All Cash Collections</h3>
+      <div class="admin-filters">
+        <select id="adminCollBranchFilter"><option value="">All branches</option></select>
+        <input type="date" id="adminCollDateFilter">
+        <button type="button" class="secondary" id="clearCollFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="adminCollTable">
+          <thead><tr>
+            <th>Date</th><th>Branch</th><th>Cash Collected</th><th>Who Collected</th>
+            <th>Finance Status</th><th>More Cash</th><th>More ATM</th><th>Short Cash</th>
+            <th>Short ATM</th><th>Total</th><th>Note</th><th></th>
+          </tr></thead>
+          <tbody id="adminCollBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="adminCollEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabManagers">
+      <h3>Area Manager Accounts</h3>
+      <p class="hint">Create login accounts for area managers here. They will log in from the same login screen.</p>
+      <div class="row three">
+        <div><label>Full Name</label><input type="text" id="newMgrName" placeholder="e.g. Kaium"></div>
+        <div><label>Username</label><input type="text" id="newMgrUser" placeholder="e.g. kaium"></div>
+        <div><label>Password</label><input type="text" id="newMgrPass" placeholder="e.g. km2026"></div>
+      </div>
+      <button type="button" class="primary" id="addMgrBtn">Add Area Manager</button>
+      <div class="table-wrap" style="margin-top:18px;">
+        <table id="mgrListTable">
+          <thead><tr><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
+          <tbody id="mgrListBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="mgrListEmpty" style="display:none;">No area managers yet.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabActivity">
+      <h3>Activity Log</h3>
+      <p class="hint">Login times and submission times for everyone.</p>
+      <div class="table-wrap">
+        <table id="activityTable">
+          <thead><tr><th>Time</th><th>Type</th><th>Name</th><th>Details</th></tr></thead>
+          <tbody id="activityBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="activityEmpty" style="display:none;">No activity yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EDIT MODALS (Admin) ===================== -->
+<div class="modal-overlay" id="editTillModal">
+  <div class="modal-box">
+    <h3>Edit Till Record</h3>
+    <div class="row">
+      <div><label>Opened By</label><input type="text" id="etOpenedBy"></div>
+      <div><label>Opening Cash</label><input type="number" step="any" id="etOpeningCash"></div>
+    </div>
+    <div class="row">
+      <div><label>Closed By</label><input type="text" id="etClosedBy"></div>
+      <div><label>Closing Cash</label><input type="number" step="any" id="etClosingCash"></div>
+    </div>
+    <div class="row single">
+      <div><label>Notes</label><input type="text" id="etNotes"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button type="button" class="primary" id="saveTillEditBtn">Save Changes</button>
+      <button type="button" class="secondary" id="cancelTillEditBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="editCollModal">
+  <div class="modal-box">
+    <h3>Edit Collection</h3>
+    <div class="row">
+      <div><label>Date</label><input type="date" id="ecDate"></div>
+      <div><label>Branch</label><select id="ecBranch"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Foodics Cash</label><input type="number" step="any" id="ecFoodicsCash"></div>
+      <div><label>Foodics ATM</label><input type="number" step="any" id="ecFoodicsATM"></div>
+    </div>
+    <div class="row">
+      <div><label>Actual Cash</label><input type="number" step="any" id="ecActualCash"></div>
+      <div><label>Actual ATM</label><input type="number" step="any" id="ecActualATM"></div>
+    </div>
+    <div class="row">
+      <div><label>Who Collected</label><input type="text" id="ecWhoCollected"></div>
+      <div><label>Finance Status</label>
+        <select id="ecStatus"><option value="Pending">Pending</option><option value="Done">Done</option></select>
+      </div>
+    </div>
+    <div class="row single">
+      <div><label>Note</label><input type="text" id="ecNote"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button type="button" class="primary" id="saveCollEditBtn">Save Changes</button>
+      <button type="button" class="secondary" id="cancelCollEditBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="config-hint" style="max-width:1100px;margin-left:auto;margin-right:auto;">
+  Set <code>CONFIG.FIREBASE_CONFIG</code> below with your Firebase project's keys before using this in production.
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ============= CONFIG =============
+const CONFIG = {
+  FIREBASE_CONFIG: {
+    apiKey: "AIzaSyBSxyt3X5virr080-LYXSsN40Jkn_F7GMo",
+    authDomain: "daily-closing-sale.firebaseapp.com",
+    projectId: "daily-closing-sale",
+    storageBucket: "daily-closing-sale.firebasestorage.app",
+    messagingSenderId: "791746331005",
+    appId: "1:791746331005:web:6284dd7d1b1be1b544cc14"
+  },
+
+  TILLS_COLLECTION: "tillClosings",
+  COLLECTIONS_COLLECTION: "cashCollections",
+  MANAGERS_COLLECTION: "areaManagers",
+  ACTIVITY_COLLECTION: "activityLog",
+
+  BRANCH_LOGINS: [
+    { username: "sadyan", password: "10234", branch: "Sadyan branch" },
+    { username: "jamyeen", password: "20456", branch: "Jamyeen branch" },
+    { username: "wadi", password: "30678", branch: "Wadi branch" },
+    { username: "magic", password: "40891", branch: "Magic fair branch" },
+    { username: "fajer", password: "50123", branch: "Fajer branch" },
+    { username: "madina", password: "60345", branch: "Madina branch" },
+    { username: "nugra", password: "70567", branch: "Nugra branch" },
+    { username: "rajhi", password: "80789", branch: "Rajhi branch" }
+  ],
+
+  ADMIN_LOGIN: { username: "admin", password: "op998800" },
+
+  SHIFT_SPLIT_HOUR: 15,
+  DAY_START_HOUR: 3
+};
+// ================================================================
+
+const firebaseApp = firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
+const db = firebase.firestore();
+const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+
+function pad(n){ return String(n).padStart(2,'0'); }
+function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function dateToStr(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function slugify(s){ return s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+function fmtTime(ts){
+  if(!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function showToast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', !!isErr);
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+function getBusinessInfo(now = new Date()){
+  const h = now.getHours() + now.getMinutes()/60;
+  const start = CONFIG.DAY_START_HOUR;
+  const split = CONFIG.SHIFT_SPLIT_HOUR;
+  let businessDate = new Date(now);
+  let shift;
+  if (h < start){ businessDate.setDate(businessDate.getDate() - 1); shift = "Night"; }
+  else if (h < split){ shift = "Morning"; }
+  else { shift = "Night"; }
+  return { businessDate: dateToStr(businessDate), shift };
+}
+
+function calcMoreShort(foodicsCash, foodicsATM, actualCash, actualATM){
+  let moreCash=0, shortCash=0, moreATM=0, shortATM=0;
+  const diffCash = actualCash - foodicsCash;
+  if(diffCash > 0) moreCash = diffCash; else if(diffCash < 0) shortCash = -diffCash;
+  const diffATM = actualATM - foodicsATM;
+  if(diffATM > 0) moreATM = diffATM; else if(diffATM < 0) shortATM = -diffATM;
+  const total = (moreCash + moreATM) - (shortCash + shortATM);
+  return { moreCash, shortCash, moreATM, shortATM, total };
+}
+
+async function logActivity(type, name, details){
+  try{
+    await db.collection(CONFIG.ACTIVITY_COLLECTION).add({ type, name, details: details || '', timestamp: serverTimestamp() });
+  }catch(e){ /* non-fatal */ }
+}
+
+function populateBranchSelect(sel, includeBlank){
+  if(includeBlank){
+    const opt = document.createElement('option'); opt.value=''; opt.textContent='Select branch'; sel.appendChild(opt);
+  }
+  CONFIG.BRANCH_LOGINS.forEach(b=>{
+    const opt = document.createElement('option'); opt.value=b.branch; opt.textContent=b.branch; sel.appendChild(opt);
+  });
+}
+
+// ===== UNIFIED LOGIN =====
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  err.classList.remove('show');
+
+  // 1. Admin
+  if(u.toLowerCase() === CONFIG.ADMIN_LOGIN.username.toLowerCase() && p === CONFIG.ADMIN_LOGIN.password){
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('adminApp').style.display = 'block';
+    logActivity('login', 'Admin', 'Admin logged in');
+    initAdminApp();
+    return;
+  }
+
+  // 2. Branch / Cashier
+  const branchMatch = CONFIG.BRANCH_LOGINS.find(b => b.username.toLowerCase() === u.toLowerCase() && b.password === p);
+  if(branchMatch){
+    currentBranch = branchMatch.branch;
+    currentBranchSlug = slugify(branchMatch.branch);
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('branchApp').style.display = 'block';
+    document.getElementById('sessionBranchName').textContent = branchMatch.branch;
+    document.getElementById('currentBranchLabel').textContent = branchMatch.branch;
+    logActivity('login', branchMatch.branch, 'Branch cashier logged in');
+    initBranchApp();
+    return;
+  }
+
+  // 3. Area Manager (Firestore)
+  try{
+    const snap = await db.collection(CONFIG.MANAGERS_COLLECTION).doc(u.toLowerCase()).get();
+    if(snap.exists && snap.data().password === p){
+      currentManagerName = snap.data().name;
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('managerApp').style.display = 'block';
+      document.getElementById('sessionManagerName').textContent = currentManagerName;
+      logActivity('login', currentManagerName, 'Area manager logged in');
+      initManagerApp();
+      return;
+    }
+  }catch(e2){ /* fallthrough to error */ }
+
+  err.classList.add('show');
+});
+
+document.getElementById('branchLogoutBtn').addEventListener('click', ()=> location.reload());
+document.getElementById('managerLogoutBtn').addEventListener('click', ()=> location.reload());
+document.getElementById('adminLogoutBtn').addEventListener('click', ()=> location.reload());
+
+// ===== BRANCH / CASHIER APP =====
+let currentBranch = null, currentBranchSlug = null;
+let currentTillId = null, currentTillData = null;
+
+async function initBranchApp(){
+  populateBranchSelect(document.getElementById('staffBranchFilter'), false);
+  document.getElementById('saveOpenBtn').disabled = true;
+  document.getElementById('closeBtn').disabled = true;
+  await loadCurrentShift();
+  document.getElementById('staffBranchFilter').addEventListener('change', loadBranchReport);
+  document.getElementById('staffDateFilter').addEventListener('change', loadBranchReport);
+  loadBranchReport();
+}
+
+function withTimeout(promise, ms, label){
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms/1000}s — check your internet connection or Firebase setup`)), ms))
+  ]);
+}
+
+async function loadCurrentShift(){
+  const info = getBusinessInfo();
+  document.getElementById('bizDateShow').textContent = info.businessDate;
+  document.getElementById('shiftShow').textContent = info.shift;
+  currentTillId = `${currentBranchSlug}_${info.businessDate}_${info.shift}`;
+  try{
+    const snap = await withTimeout(db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).get(), 8000, 'Loading shift data');
+    currentTillData = snap.exists ? snap.data() : null;
+    renderShiftUI();
+  }catch(err){
+    showToast(err.message, true);
+    document.getElementById('statusShow').innerHTML = `<span class="status-badge not-opened">unknown</span>`;
+  }finally{
+    document.getElementById('saveOpenBtn').disabled = false;
+    document.getElementById('closeBtn').disabled = false;
+  }
+}
+
+function renderShiftUI(){
+  const status = currentTillData ? currentTillData.status : 'not-opened';
+  document.getElementById('statusShow').innerHTML = `<span class="status-badge ${status}">${status.replace('-', ' ')}</span>`;
+
+  const openForm = document.getElementById('openForm');
+  const openDisplay = document.getElementById('openDisplay');
+  const stepCloseBlock = document.getElementById('stepCloseBlock');
+  const closedDisplay = document.getElementById('closedDisplay');
+
+  if(!currentTillData){
+    openForm.style.display = 'block'; openDisplay.style.display = 'none';
+    stepCloseBlock.classList.add('locked'); closedDisplay.style.display = 'none';
+    return;
+  }
+
+  openForm.style.display = 'none'; openDisplay.style.display = 'block';
+  document.getElementById('openedByShow').value = currentTillData.openedBy || '';
+  document.getElementById('openingCashShow').value = currentTillData.openingCash != null ? `${currentTillData.openingCash} riyal` : '';
+  document.getElementById('openTimeShow').textContent = 'Opened at: ' + fmtTime(currentTillData.openTime);
+
+  if(currentTillData.status === 'closed'){
+    stepCloseBlock.classList.add('locked');
+    closedDisplay.style.display = 'block';
+    document.getElementById('closedByShow').value = currentTillData.closedBy || '';
+    document.getElementById('closingCashShow').value = currentTillData.closingCash != null ? `${currentTillData.closingCash} riyal` : '';
+    document.getElementById('closeTimeShow').textContent = 'Closed at: ' + fmtTime(currentTillData.closeTime);
+    return;
+  }
+  stepCloseBlock.classList.remove('locked');
+}
+
+document.getElementById('saveOpenBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('openByName').value.trim();
+  const cashVal = parseFloat(document.getElementById('openingCashInput').value);
+  if(!name){ showToast('Apna naam daalein', true); return; }
+  if(isNaN(cashVal)){ showToast('Opening cash amount daalein', true); return; }
+  if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
+  const info = getBusinessInfo();
+  try{
+    await withTimeout(db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).set({
+      branch: currentBranch, branchSlug: currentBranchSlug,
+      businessDate: info.businessDate, shift: info.shift,
+      status: 'open', openingCash: cashVal, openedBy: name, openTime: serverTimestamp()
+    }), 10000, 'Saving');
+    showToast('Till opened successfully');
+    await loadCurrentShift();
+    loadBranchReport();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+});
+
+document.getElementById('closeBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('closeByName').value.trim();
+  const notes = document.getElementById('closeNotes').value.trim();
+  const cashVal = parseFloat(document.getElementById('closingCashInput').value);
+  if(!name){ showToast('Apna naam daalein', true); return; }
+  if(isNaN(cashVal)){ showToast('Final cash count daalein', true); return; }
+  if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
+  if(!confirm(`Close till with final amount ${cashVal} riyal? This cannot be undone.`)) return;
+  try{
+    await db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).update({
+      status: 'closed', closingCash: cashVal, closedBy: name, closeTime: serverTimestamp(), notes: notes || ''
+    });
+    showToast('Till closed successfully');
+    await loadCurrentShift();
+    loadBranchReport();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+});
+
+function renderTillRows(rows, tbodyId, emptyId, withActions){
+  const tbody = document.getElementById(tbodyId);
+  const empty = document.getElementById(emptyId);
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.branch || ''}</td><td>${r.businessDate || ''}</td><td>${r.shift || ''}</td>
+      <td><span class="status-badge ${r.status}">${(r.status||'').replace('-', ' ')}</span></td>
+      <td>${r.openedBy || ''}</td><td>${r.openingCash != null ? r.openingCash : ''}</td>
+      <td>${r.closedBy || ''}</td><td>${r.closingCash != null ? r.closingCash : ''}</td>
+      <td>${fmtTime(r.closeTime)}</td><td>${r.notes || ''}</td>
+      ${withActions ? `<td><button type="button" class="link-btn" data-tedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-tdel="${r.id}">Delete</button></td>` : ''}
+    `;
+    tbody.appendChild(tr);
+  });
+  if(withActions){
+    tbody.querySelectorAll('[data-tedit]').forEach(btn => btn.addEventListener('click', ()=> openTillEditModal(btn.dataset.tedit, rows)));
+    tbody.querySelectorAll('[data-tdel]').forEach(btn => btn.addEventListener('click', async ()=>{
+      if(!confirm('Delete this till record permanently?')) return;
+      await db.collection(CONFIG.TILLS_COLLECTION).doc(btn.dataset.tdel).delete();
+      loadAdminTillReport();
+    }));
+  }
+}
+
+async function loadBranchReport(){
+  const branchVal = document.getElementById('staffBranchFilter').value;
+  const dateVal = document.getElementById('staffDateFilter').value;
+  const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(dateVal) rows = rows.filter(r => r.businessDate === dateVal);
+  rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
+  renderTillRows(rows, 'staffReportBody', 'staffReportEmpty', false);
+}
+
+// ===== AREA MANAGER APP =====
+let currentManagerName = null;
+
+function initManagerApp(){
+  document.getElementById('cDate').value = todayStr();
+  populateBranchSelect(document.getElementById('cBranch'), true);
+  populateBranchSelect(document.getElementById('mgrBranchFilter'), false);
+
+  ['cDate','cBranch'].forEach(id => document.getElementById(id).addEventListener('change', loadTillReference));
+  ['cFoodicsCash','cFoodicsATM','cActualCash','cActualATM'].forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
+
+  document.getElementById('submitCollectionBtn').addEventListener('click', submitCollection);
+  document.getElementById('mgrBranchFilter').addEventListener('change', loadManagerReport);
+  document.getElementById('mgrDateFilter').addEventListener('change', loadManagerReport);
+
+  loadTillReference();
+  updatePreview();
+  loadManagerReport();
+}
+
+async function loadTillReference(){
+  const branch = document.getElementById('cBranch').value;
+  const date = document.getElementById('cDate').value;
+  const box = document.getElementById('tillRefContent');
+  if(!branch || !date){ box.textContent = 'Select a branch and date to see till closing records.'; return; }
+  const slug = slugify(branch);
+  box.innerHTML = 'Loading...';
+  try{
+    const [morningSnap, nightSnap] = await Promise.all([
+      db.collection(CONFIG.TILLS_COLLECTION).doc(`${slug}_${date}_Morning`).get(),
+      db.collection(CONFIG.TILLS_COLLECTION).doc(`${slug}_${date}_Night`).get()
+    ]);
+    let html = '';
+    [['Morning', morningSnap], ['Night', nightSnap]].forEach(([label, snap])=>{
+      if(snap.exists){
+        const d = snap.data();
+        html += `<div class="ref-row"><span>${label} shift — status: ${d.status}</span>
+          <span>Opening: ${d.openingCash ?? '—'} | Closing: ${d.closingCash ?? '—'} | Closed by: ${d.closedBy ?? '—'}</span></div>`;
+      } else {
+        html += `<div class="ref-row"><span>${label} shift</span><span>No record found</span></div>`;
+      }
+    });
+    box.innerHTML = html;
+  }catch(e){ box.textContent = 'Could not load till reference: ' + e.message; }
+}
+
+function updatePreview(){
+  const foodicsCash = num(document.getElementById('cFoodicsCash').value);
+  const foodicsATM = num(document.getElementById('cFoodicsATM').value);
+  const actualCash = num(document.getElementById('cActualCash').value);
+  const actualATM = num(document.getElementById('cActualATM').value);
+  const r = calcMoreShort(foodicsCash, foodicsATM, actualCash, actualATM);
+  document.getElementById('pvMoreCash').textContent = r.moreCash;
+  document.getElementById('pvMoreATM').textContent = r.moreATM;
+  document.getElementById('pvShortCash').textContent = r.shortCash;
+  document.getElementById('pvShortATM').textContent = r.shortATM;
+  const totalEl = document.getElementById('pvTotal');
+  totalEl.textContent = r.total;
+  totalEl.className = r.total < 0 ? 'neg' : 'pos';
+}
+
+async function submitCollection(){
+  const date = document.getElementById('cDate').value;
+  const branch = document.getElementById('cBranch').value;
+  const foodicsCash = num(document.getElementById('cFoodicsCash').value);
+  const foodicsATM = num(document.getElementById('cFoodicsATM').value);
+  const actualCash = num(document.getElementById('cActualCash').value);
+  const actualATM = num(document.getElementById('cActualATM').value);
+  const note = document.getElementById('cNote').value.trim();
+  if(!date || !branch){ showToast('Date aur branch select karein', true); return; }
+
+  const r = calcMoreShort(foodicsCash, foodicsATM, actualCash, actualATM);
+  try{
+    await db.collection(CONFIG.COLLECTIONS_COLLECTION).add({
+      date, branch, branchSlug: slugify(branch),
+      foodicsCash, foodicsATM, actualCash, actualATM,
+      cashCollectedTotal: actualCash,
+      moreCash: r.moreCash, moreATM: r.moreATM, shortCash: r.shortCash, shortATM: r.shortATM, total: r.total,
+      whoCollected: currentManagerName, submittedFinanceStatus: 'Pending', note, timestamp: serverTimestamp()
+    });
+    await logActivity('submission', currentManagerName, `${branch} — ${date} — Total: ${r.total}`);
+    showToast('Collection submitted successfully');
+    ['cFoodicsCash','cFoodicsATM','cActualCash','cActualATM','cNote'].forEach(id => document.getElementById(id).value = '');
+    updatePreview();
+    loadManagerReport();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+function renderCollectionRows(rows, tbodyId, emptyId, withActions){
+  const tbody = document.getElementById(tbodyId);
+  const empty = document.getElementById(emptyId);
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date || ''}</td><td>${r.branch || ''}</td><td>${r.cashCollectedTotal ?? ''}</td>
+      <td>${r.whoCollected || ''}</td>
+      <td><span class="status-badge ${r.submittedFinanceStatus}">${r.submittedFinanceStatus || ''}</span></td>
+      <td>${r.moreCash ?? 0}</td><td>${r.moreATM ?? 0}</td><td>${r.shortCash ?? 0}</td><td>${r.shortATM ?? 0}</td>
+      <td class="${(r.total||0) < 0 ? 'neg' : 'pos'}">${r.total ?? 0}</td><td>${r.note || ''}</td>
+      ${withActions ? `<td><button type="button" class="link-btn" data-cedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-cdel="${r.id}">Delete</button></td>` : ''}
+    `;
+    tbody.appendChild(tr);
+  });
+  if(withActions){
+    tbody.querySelectorAll('[data-cedit]').forEach(btn => btn.addEventListener('click', ()=> openCollEditModal(btn.dataset.cedit, rows)));
+    tbody.querySelectorAll('[data-cdel]').forEach(btn => btn.addEventListener('click', async ()=>{
+      if(!confirm('Delete this collection record permanently?')) return;
+      await db.collection(CONFIG.COLLECTIONS_COLLECTION).doc(btn.dataset.cdel).delete();
+      loadAdminCollReport();
+    }));
+  }
+}
+
+async function loadManagerReport(){
+  const branchVal = document.getElementById('mgrBranchFilter').value;
+  const dateVal = document.getElementById('mgrDateFilter').value;
+  const snap = await db.collection(CONFIG.COLLECTIONS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(dateVal) rows = rows.filter(r => r.date === dateVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+  renderCollectionRows(rows, 'mgrReportBody', 'mgrReportEmpty', false);
+}
+
+// ===== ADMIN APP =====
+let cachedTillRows = [], cachedCollRows = [];
+
+function initAdminApp(){
+  populateBranchSelect(document.getElementById('adminTillBranchFilter'), false);
+  populateBranchSelect(document.getElementById('adminCollBranchFilter'), false);
+  populateBranchSelect(document.getElementById('ecBranch'), false);
+
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'tabManagers') loadManagersList();
+      if(btn.dataset.tab === 'tabActivity') loadActivityLog();
+    });
+  });
+
+  document.getElementById('adminTillBranchFilter').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDateFilter').addEventListener('change', loadAdminTillReport);
+  document.getElementById('clearTillFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('adminTillBranchFilter').value = '';
+    document.getElementById('adminTillDateFilter').value = '';
+    loadAdminTillReport();
+  });
+
+  document.getElementById('adminCollBranchFilter').addEventListener('change', loadAdminCollReport);
+  document.getElementById('adminCollDateFilter').addEventListener('change', loadAdminCollReport);
+  document.getElementById('clearCollFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('adminCollBranchFilter').value = '';
+    document.getElementById('adminCollDateFilter').value = '';
+    loadAdminCollReport();
+  });
+
+  document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
+  document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
+  document.getElementById('cancelTillEditBtn').addEventListener('click', ()=> document.getElementById('editTillModal').classList.remove('show'));
+  document.getElementById('saveCollEditBtn').addEventListener('click', saveCollEdit);
+  document.getElementById('cancelCollEditBtn').addEventListener('click', ()=> document.getElementById('editCollModal').classList.remove('show'));
+
+  loadAdminTillReport();
+  loadAdminCollReport();
+}
+
+async function loadAdminTillReport(){
+  const branchVal = document.getElementById('adminTillBranchFilter').value;
+  const dateVal = document.getElementById('adminTillDateFilter').value;
+  const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(dateVal) rows = rows.filter(r => r.businessDate === dateVal);
+  rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
+  cachedTillRows = rows;
+  renderTillRows(rows, 'adminTillBody', 'adminTillEmpty', true);
+}
+
+let editingTillId = null;
+function openTillEditModal(id, rows){
+  const r = (rows || cachedTillRows).find(x => x.id === id);
+  if(!r) return;
+  editingTillId = id;
+  document.getElementById('etOpenedBy').value = r.openedBy || '';
+  document.getElementById('etOpeningCash').value = r.openingCash ?? 0;
+  document.getElementById('etClosedBy').value = r.closedBy || '';
+  document.getElementById('etClosingCash').value = r.closingCash ?? 0;
+  document.getElementById('etNotes').value = r.notes || '';
+  document.getElementById('editTillModal').classList.add('show');
+}
+
+async function saveTillEdit(){
+  if(!editingTillId) return;
+  try{
+    await db.collection(CONFIG.TILLS_COLLECTION).doc(editingTillId).update({
+      openedBy: document.getElementById('etOpenedBy').value.trim(),
+      openingCash: num(document.getElementById('etOpeningCash').value),
+      closedBy: document.getElementById('etClosedBy').value.trim(),
+      closingCash: num(document.getElementById('etClosingCash').value),
+      notes: document.getElementById('etNotes').value.trim()
+    });
+    showToast('Till record updated');
+    document.getElementById('editTillModal').classList.remove('show');
+    loadAdminTillReport();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+async function loadAdminCollReport(){
+  const branchVal = document.getElementById('adminCollBranchFilter').value;
+  const dateVal = document.getElementById('adminCollDateFilter').value;
+  const snap = await db.collection(CONFIG.COLLECTIONS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(dateVal) rows = rows.filter(r => r.date === dateVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+  cachedCollRows = rows;
+  renderCollectionRows(rows, 'adminCollBody', 'adminCollEmpty', true);
+}
+
+let editingCollId = null;
+function openCollEditModal(id, rows){
+  const r = (rows || cachedCollRows).find(x => x.id === id);
+  if(!r) return;
+  editingCollId = id;
+  document.getElementById('ecDate').value = r.date || '';
+  document.getElementById('ecBranch').value = r.branch || '';
+  document.getElementById('ecFoodicsCash').value = r.foodicsCash ?? 0;
+  document.getElementById('ecFoodicsATM').value = r.foodicsATM ?? 0;
+  document.getElementById('ecActualCash').value = r.actualCash ?? 0;
+  document.getElementById('ecActualATM').value = r.actualATM ?? 0;
+  document.getElementById('ecWhoCollected').value = r.whoCollected || '';
+  document.getElementById('ecStatus').value = r.submittedFinanceStatus || 'Pending';
+  document.getElementById('ecNote').value = r.note || '';
+  document.getElementById('editCollModal').classList.add('show');
+}
+
+async function saveCollEdit(){
+  if(!editingCollId) return;
+  const date = document.getElementById('ecDate').value;
+  const branch = document.getElementById('ecBranch').value;
+  const foodicsCash = num(document.getElementById('ecFoodicsCash').value);
+  const foodicsATM = num(document.getElementById('ecFoodicsATM').value);
+  const actualCash = num(document.getElementById('ecActualCash').value);
+  const actualATM = num(document.getElementById('ecActualATM').value);
+  const whoCollected = document.getElementById('ecWhoCollected').value.trim();
+  const status = document.getElementById('ecStatus').value;
+  const note = document.getElementById('ecNote').value.trim();
+  const r = calcMoreShort(foodicsCash, foodicsATM, actualCash, actualATM);
+  try{
+    await db.collection(CONFIG.COLLECTIONS_COLLECTION).doc(editingCollId).update({
+      date, branch, branchSlug: slugify(branch),
+      foodicsCash, foodicsATM, actualCash, actualATM, cashCollectedTotal: actualCash,
+      moreCash: r.moreCash, moreATM: r.moreATM, shortCash: r.shortCash, shortATM: r.shortATM, total: r.total,
+      whoCollected, submittedFinanceStatus: status, note
+    });
+    showToast('Record updated');
+    document.getElementById('editCollModal').classList.remove('show');
+    loadAdminCollReport();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+async function addAreaManager(){
+  const name = document.getElementById('newMgrName').value.trim();
+  const username = document.getElementById('newMgrUser').value.trim().toLowerCase();
+  const password = document.getElementById('newMgrPass').value.trim();
+  if(!name || !username || !password){ showToast('Sab fields bharein', true); return; }
+  try{
+    await db.collection(CONFIG.MANAGERS_COLLECTION).doc(username).set({ name, username, password });
+    showToast('Area manager added');
+    document.getElementById('newMgrName').value = '';
+    document.getElementById('newMgrUser').value = '';
+    document.getElementById('newMgrPass').value = '';
+    loadManagersList();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+async function loadManagersList(){
+  const snap = await db.collection(CONFIG.MANAGERS_COLLECTION).get();
+  const tbody = document.getElementById('mgrListBody');
+  const empty = document.getElementById('mgrListEmpty');
+  tbody.innerHTML = '';
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.name}</td><td>${r.username}</td><td>${r.password}</td>
+      <td><button type="button" class="link-btn del" data-mgrdel="${r.id}">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-mgrdel]').forEach(btn => btn.addEventListener('click', async ()=>{
+    if(!confirm('Delete this area manager account?')) return;
+    await db.collection(CONFIG.MANAGERS_COLLECTION).doc(btn.dataset.mgrdel).delete();
+    loadManagersList();
+  }));
+}
+
+async function loadActivityLog(){
+  const snap = await db.collection(CONFIG.ACTIVITY_COLLECTION).get();
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  rows.sort((a,b) => {
+    const ta = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
+    const tb = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
+    return tb - ta;
+  });
+  const tbody = document.getElementById('activityBody');
+  const empty = document.getElementById('activityEmpty');
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${fmtTime(r.timestamp)}</td><td>${r.type}</td><td>${r.name}</td><td>${r.details || ''}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+</script>
+</body>
+</html>
