@@ -118,6 +118,12 @@
   .modal-overlay.show{display:flex;}
   .modal-box{background:#fff;border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
   .modal-box h3{margin-top:0;}
+
+  .pill-list{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;}
+  .pill{background:var(--beige-2);border:1px solid var(--line);border-radius:30px;padding:8px 8px 8px 16px;font-size:13px;font-weight:700;color:var(--green);display:inline-flex;align-items:center;gap:10px;}
+  .pill .pill-meta{font-weight:400;color:var(--ink-soft);font-size:11.5px;}
+  .pill-x{background:var(--alert);color:#fff;border:none;width:20px;height:20px;min-width:20px;border-radius:50%;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;line-height:1;padding:0;}
+  .pill-x:hover{opacity:.85;}
 </style>
 </head>
 <body>
@@ -311,8 +317,7 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="tabTill">Till Closing</button>
       <button type="button" class="tab-btn" data-tab="tabCollections">Cash Collections</button>
-      <button type="button" class="tab-btn" data-tab="tabBranches">Branch Accounts</button>
-      <button type="button" class="tab-btn" data-tab="tabManagers">Area Managers</button>
+      <button type="button" class="tab-btn" data-tab="tabBranches">Branches &amp; Users</button>
       <button type="button" class="tab-btn" data-tab="tabActivity">Activity Log</button>
     </div>
 
@@ -357,40 +362,39 @@
       <div class="empty" id="adminCollEmpty" style="display:none;">No records found.</div>
     </div>
 
-    <div class="tab-panel card" id="tabBranches">
-      <h3>Branch Login Accounts</h3>
-      <p class="hint">Create, view, or remove branch (cashier) login accounts here. Passwords are stored in Firebase only — never in this page's source code.</p>
-      <div class="row three">
-        <div><label>Branch Name</label><input type="text" id="newBranchName" placeholder="e.g. Sadyan branch"></div>
-        <div><label>Username</label><input type="text" id="newBranchUser" placeholder="e.g. sadyan"></div>
-        <div><label>Password</label><input type="text" id="newBranchPass" placeholder="e.g. 10234"></div>
+    <div class="tab-panel" id="tabBranches">
+      <div class="card">
+        <h3>Manage Branches</h3>
+        <p class="hint">Create or remove branches. Branches are used when cashiers log in and in reports/filters.</p>
+        <div class="pill-list" id="branchPillList"></div>
+        <div class="row single">
+          <div><label>Branch Name</label><input type="text" id="newBranchNameOnly" placeholder="e.g. Riyadh branch"></div>
+        </div>
+        <button type="button" class="primary" id="addBranchOnlyBtn">Add Branch</button>
       </div>
-      <button type="button" class="primary" id="addBranchBtn">Add Branch Account</button>
-      <div class="table-wrap" style="margin-top:18px;">
-        <table id="branchListTable">
-          <thead><tr><th>Branch</th><th>Username</th><th>Password</th><th></th></tr></thead>
-          <tbody id="branchListBody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="branchListEmpty" style="display:none;">No branch accounts yet.</div>
-    </div>
 
-    <div class="tab-panel card" id="tabManagers">
-      <h3>Area Manager Accounts</h3>
-      <p class="hint">Create login accounts for area managers here. They will log in from the same login screen.</p>
-      <div class="row three">
-        <div><label>Full Name</label><input type="text" id="newMgrName" placeholder="e.g. Kaium"></div>
-        <div><label>Username</label><input type="text" id="newMgrUser" placeholder="e.g. kaium"></div>
-        <div><label>Password</label><input type="text" id="newMgrPass" placeholder="e.g. km2026"></div>
+      <div class="card" style="margin-top:18px;">
+        <h3>Manage Users</h3>
+        <p class="hint">Create logins for Admin, Branch cashiers, and Area managers. Passwords are shown here for your reference — keep this page private, share credentials only with the right person.</p>
+        <div class="pill-list" id="userPillList"></div>
+        <div class="row three">
+          <div><label>Name</label><input type="text" id="newUserName" placeholder="e.g. Ahmed"></div>
+          <div><label>Username</label><input type="text" id="newUserUsername" placeholder="e.g. ahmed"></div>
+          <div><label>Password</label><input type="text" id="newUserPass" placeholder="e.g. 90123"></div>
+        </div>
+        <div class="row">
+          <div><label>Role</label>
+            <select id="newUserRole">
+              <option value="branch">Branch Cashier</option>
+              <option value="manager">Area Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div id="userBranchField"><label>Branch</label><select id="newUserBranch"></select></div>
+        </div>
+        <button type="button" class="primary" id="saveUserBtn">Create User</button>
+        <p class="hint" id="userFormHint" style="margin-top:8px;"></p>
       </div>
-      <button type="button" class="primary" id="addMgrBtn">Add Area Manager</button>
-      <div class="table-wrap" style="margin-top:18px;">
-        <table id="mgrListTable">
-          <thead><tr><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
-          <tbody id="mgrListBody"></tbody>
-        </table>
-      </div>
-      <div class="empty" id="mgrListEmpty" style="display:none;">No area managers yet.</div>
     </div>
 
     <div class="tab-panel card" id="tabActivity">
@@ -588,7 +592,7 @@ async function bootstrapAdminIfNeeded(username, password){
   const pw = ensureMinPassword(password);
   try{
     const cred = await auth.createUserWithEmailAndPassword(emailFor(username), pw);
-    await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).set({ role: 'admin', username });
+    await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).set({ role: 'admin', username, name: 'Admin', password: pw });
     try{ await db.collection('system').doc('bootstrap').set({ adminCreated: true }); }catch(e){ /* non-fatal */ }
     routeToApp({ role: 'admin', username });
   }catch(err){
@@ -954,11 +958,13 @@ async function initAdminApp(){
       document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
-      if(btn.dataset.tab === 'tabBranches') loadBranchesList();
-      if(btn.dataset.tab === 'tabManagers') loadManagersList();
+      if(btn.dataset.tab === 'tabBranches'){ loadBranchPills(); loadUserPills(); }
       if(btn.dataset.tab === 'tabActivity') loadActivityLog();
     });
   });
+
+  document.getElementById('newUserRole').addEventListener('change', updateUserBranchFieldVisibility);
+  updateUserBranchFieldVisibility();
 
   document.getElementById('adminTillBranchFilter').addEventListener('change', loadAdminTillReport);
   document.getElementById('adminTillDateFilter').addEventListener('change', loadAdminTillReport);
@@ -976,8 +982,8 @@ async function initAdminApp(){
     loadAdminCollReport();
   });
 
-  document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
-  document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
+  document.getElementById('addBranchOnlyBtn').addEventListener('click', addBranchOnly);
+  document.getElementById('saveUserBtn').addEventListener('click', saveUser);
   document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
   document.getElementById('cancelTillEditBtn').addEventListener('click', ()=> document.getElementById('editTillModal').classList.remove('show'));
   document.getElementById('saveCollEditBtn').addEventListener('click', saveCollEdit);
@@ -1089,101 +1095,158 @@ function getSecondaryAuth(){
   return app.auth();
 }
 
-async function createSecureAccount(username, password, profile){
+function updateUserBranchFieldVisibility(){
+  const role = document.getElementById('newUserRole').value;
+  document.getElementById('userBranchField').style.display = (role === 'branch') ? 'block' : 'none';
+}
+
+// Creates a brand-new secure Firebase Authentication account, OR — if the
+// username already belongs to an existing user — resets that account's
+// password (using the previously-stored plaintext password to sign in first,
+// since Firebase never lets anyone read back or blind-overwrite a password).
+// A plaintext copy of the password is also saved on the user's profile so
+// admin can see it again later here in the dashboard.
+async function createOrUpdateSecureAccount(username, password, profile, existingUser){
   username = username.toLowerCase().trim();
   const pw = ensureMinPassword(password);
   const secAuth = getSecondaryAuth();
   let uid;
-  try{
-    const cred = await secAuth.createUserWithEmailAndPassword(emailFor(username), pw);
+  if(existingUser){
+    // Password reset path: sign in with the OLD known password, then set the new one.
+    const oldPw = ensureMinPassword(existingUser.password || '');
+    const cred = await secAuth.signInWithEmailAndPassword(emailFor(username), oldPw);
     uid = cred.user.uid;
-  }catch(err){
-    if(err.code === 'auth/email-already-in-use'){
-      const cred = await secAuth.signInWithEmailAndPassword(emailFor(username), pw);
+    await cred.user.updatePassword(pw);
+  } else {
+    try{
+      const cred = await secAuth.createUserWithEmailAndPassword(emailFor(username), pw);
       uid = cred.user.uid;
-    } else { throw err; }
+    }catch(err){
+      if(err.code === 'auth/email-already-in-use'){
+        throw new Error('Username "' + username + '" already exists in Firebase Authentication but not in this list. Delete it from Firebase Console > Authentication first, or pick a different username.');
+      }
+      throw err;
+    }
   }
-  await db.collection(CONFIG.USERS_COLLECTION).doc(uid).set({ ...profile, username }, { merge: true });
+  await db.collection(CONFIG.USERS_COLLECTION).doc(uid).set({ ...profile, username, password: pw }, { merge: true });
   await secAuth.signOut();
   return { uid, pw };
 }
 
-async function addAreaManager(){
-  const name = document.getElementById('newMgrName').value.trim();
-  const username = document.getElementById('newMgrUser').value.trim().toLowerCase();
-  const password = document.getElementById('newMgrPass').value.trim();
+async function loadAllUsers(){
+  const snap = await db.collection(CONFIG.USERS_COLLECTION).get();
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  return rows;
+}
+
+async function saveUser(){
+  const name = document.getElementById('newUserName').value.trim();
+  const username = document.getElementById('newUserUsername').value.trim().toLowerCase();
+  const password = document.getElementById('newUserPass').value.trim();
+  const role = document.getElementById('newUserRole').value;
+  const branch = document.getElementById('newUserBranch').value;
+  const hint = document.getElementById('userFormHint');
+  hint.textContent = '';
+
   if(!name || !username || !password){ showToast('Sab fields bharein', true); return; }
+  if(role === 'branch' && !branch){ showToast('Branch select karein', true); return; }
+
   try{
-    const { pw } = await createSecureAccount(username, password, { role: 'manager', name });
-    showToast(pw === password ? 'Area manager added' : `Area manager added — password saved as "${pw}" (min 6 characters required)`);
-    document.getElementById('newMgrName').value = '';
-    document.getElementById('newMgrUser').value = '';
-    document.getElementById('newMgrPass').value = '';
-    loadManagersList();
+    const allUsers = await loadAllUsers();
+    const existingUser = allUsers.find(u => (u.username || '').toLowerCase() === username);
+    const profile = role === 'branch' ? { role, name, branch } : { role, name };
+    const { pw } = await createOrUpdateSecureAccount(username, password, profile, existingUser);
+
+    if(role === 'branch'){
+      await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(slugify(branch)).set({ name: branch });
+      await loadBranchList(true);
+    }
+
+    showToast(existingUser
+      ? `Password updated for "${username}"`
+      : (pw === password ? 'User created' : `User created — password saved as "${pw}" (min 6 characters required)`));
+
+    document.getElementById('newUserName').value = '';
+    document.getElementById('newUserUsername').value = '';
+    document.getElementById('newUserPass').value = '';
+    loadUserPills();
+    loadBranchPills();
+  }catch(err){
+    hint.textContent = 'Error: ' + err.message;
+    showToast('Error: ' + err.message, true);
+  }
+}
+
+async function deleteUser(uid, label){
+  if(!confirm(`Remove "${label}"'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication, otherwise the username stays reserved.)`)) return;
+  try{
+    await db.collection(CONFIG.USERS_COLLECTION).doc(uid).delete();
+    showToast('User removed');
+    loadUserPills();
   }catch(err){ showToast('Error: ' + err.message, true); }
 }
 
-async function addBranchLogin(){
-  const branch = document.getElementById('newBranchName').value.trim();
-  const username = document.getElementById('newBranchUser').value.trim().toLowerCase();
-  const password = document.getElementById('newBranchPass').value.trim();
-  if(!branch || !username || !password){ showToast('Sab fields bharein', true); return; }
+async function loadUserPills(){
+  const list = document.getElementById('userPillList');
+  list.innerHTML = '';
+  const users = (await loadAllUsers()).sort((a,b) => (a.username||'').localeCompare(b.username||''));
+  if(users.length === 0){ list.innerHTML = '<span class="hint">No users yet.</span>'; return; }
+  const roleLabel = { admin: 'Admin', branch: 'Branch', manager: 'Manager' };
+  users.forEach(u=>{
+    const pill = document.createElement('div');
+    pill.className = 'pill';
+    const meta = roleLabel[u.role] || u.role;
+    const branchTxt = u.role === 'branch' && u.branch ? ' · ' + u.branch : '';
+    pill.innerHTML = `${u.username} / ${u.password || '—'} <span class="pill-meta">(${meta}${branchTxt})</span>`;
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'pill-x'; x.textContent = '×';
+    x.addEventListener('click', ()=> deleteUser(u.id, u.username));
+    pill.appendChild(x);
+    list.appendChild(pill);
+  });
+}
+
+async function addBranchOnly(){
+  const name = document.getElementById('newBranchNameOnly').value.trim();
+  if(!name){ showToast('Branch naam likhein', true); return; }
   try{
-    const { pw } = await createSecureAccount(username, password, { role: 'branch', branch });
-    await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(slugify(branch)).set({ name: branch });
-    showToast(pw === password ? 'Branch account added' : `Branch account added — password saved as "${pw}" (min 6 characters required)`);
-    document.getElementById('newBranchName').value = '';
-    document.getElementById('newBranchUser').value = '';
-    document.getElementById('newBranchPass').value = '';
+    await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(slugify(name)).set({ name });
+    document.getElementById('newBranchNameOnly').value = '';
     await loadBranchList(true);
-    loadBranchesList();
+    loadBranchPills();
+    showToast('Branch added');
   }catch(err){ showToast('Error: ' + err.message, true); }
 }
 
-async function loadBranchesList(){
-  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','branch').get();
-  const tbody = document.getElementById('branchListBody');
-  const empty = document.getElementById('branchListEmpty');
-  tbody.innerHTML = '';
-  const rows = [];
-  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-  rows.sort((a,b) => (a.branch||'').localeCompare(b.branch||''));
-  if(rows.length === 0){ empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  rows.forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.branch}</td><td>${r.username}</td><td>Secured in Firebase Authentication</td>
-      <td><button type="button" class="link-btn del" data-branchdel="${r.id}">Delete</button></td>`;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll('[data-branchdel]').forEach(btn => btn.addEventListener('click', async ()=>{
-    if(!confirm('Remove this branch account\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
-    await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.branchdel).delete();
-    loadBranchesList();
-  }));
+async function deleteBranchOnly(id, name){
+  if(!confirm(`Remove branch "${name}"? (Any users still assigned to this branch will need to be reassigned or removed.)`)) return;
+  try{
+    await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(id).delete();
+    await loadBranchList(true);
+    loadBranchPills();
+    showToast('Branch removed');
+  }catch(err){ showToast('Error: ' + err.message, true); }
 }
 
-async function loadManagersList(){
-  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','manager').get();
-  const tbody = document.getElementById('mgrListBody');
-  const empty = document.getElementById('mgrListEmpty');
-  tbody.innerHTML = '';
-  const rows = [];
-  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-  if(rows.length === 0){ empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  rows.forEach(r=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.name}</td><td>${r.username}</td><td>Secured in Firebase Authentication</td>
-      <td><button type="button" class="link-btn del" data-mgrdel="${r.id}">Delete</button></td>`;
-    tbody.appendChild(tr);
+async function loadBranchPills(){
+  await loadBranchList(true);
+  const list = document.getElementById('branchPillList');
+  list.innerHTML = '';
+  populateBranchSelect(document.getElementById('newUserBranch'), true);
+  if(BRANCH_LIST.length === 0){ list.innerHTML = '<span class="hint">No branches yet.</span>'; return; }
+  BRANCH_LIST.forEach(b=>{
+    const pill = document.createElement('div');
+    pill.className = 'pill';
+    pill.innerHTML = `${b.branch}`;
+    const x = document.createElement('button');
+    x.type = 'button'; x.className = 'pill-x'; x.textContent = '×';
+    x.addEventListener('click', ()=> deleteBranchOnly(b.id, b.branch));
+    pill.appendChild(x);
+    list.appendChild(pill);
   });
-  tbody.querySelectorAll('[data-mgrdel]').forEach(btn => btn.addEventListener('click', async ()=>{
-    if(!confirm('Remove this area manager\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
-    await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.mgrdel).delete();
-    loadManagersList();
-  }));
 }
+
 
 async function loadActivityLog(){
   const snap = await db.collection(CONFIG.ACTIVITY_COLLECTION).get();
