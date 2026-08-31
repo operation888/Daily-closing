@@ -202,10 +202,9 @@
     </div>
 
     <div class="card">
-      <h3>All Branches Report</h3>
-      <p class="hint">Live data from every branch.</p>
+      <h3>My Branch Report</h3>
+      <p class="hint">Live data for your branch only.</p>
       <div class="admin-filters" style="margin:0 0 14px;">
-        <select id="staffBranchFilter"><option value="">All branches</option></select>
         <input type="date" id="staffDateFilter">
       </div>
       <div class="table-wrap">
@@ -312,8 +311,10 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="tabTill">Till Closing</button>
       <button type="button" class="tab-btn" data-tab="tabCollections">Cash Collections</button>
+      <button type="button" class="tab-btn" data-tab="tabBranches">Branch Accounts</button>
       <button type="button" class="tab-btn" data-tab="tabManagers">Area Managers</button>
       <button type="button" class="tab-btn" data-tab="tabActivity">Activity Log</button>
+      <button type="button" class="tab-btn" data-tab="tabSetup">Setup</button>
     </div>
 
     <div class="tab-panel active card" id="tabTill">
@@ -357,6 +358,24 @@
       <div class="empty" id="adminCollEmpty" style="display:none;">No records found.</div>
     </div>
 
+    <div class="tab-panel card" id="tabBranches">
+      <h3>Branch Login Accounts</h3>
+      <p class="hint">Create, view, or remove branch (cashier) login accounts here. Passwords are stored in Firebase only — never in this page's source code.</p>
+      <div class="row three">
+        <div><label>Branch Name</label><input type="text" id="newBranchName" placeholder="e.g. Sadyan branch"></div>
+        <div><label>Username</label><input type="text" id="newBranchUser" placeholder="e.g. sadyan"></div>
+        <div><label>Password</label><input type="text" id="newBranchPass" placeholder="e.g. 10234"></div>
+      </div>
+      <button type="button" class="primary" id="addBranchBtn">Add Branch Account</button>
+      <div class="table-wrap" style="margin-top:18px;">
+        <table id="branchListTable">
+          <thead><tr><th>Branch</th><th>Username</th><th>Password</th><th></th></tr></thead>
+          <tbody id="branchListBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="branchListEmpty" style="display:none;">No branch accounts yet.</div>
+    </div>
+
     <div class="tab-panel card" id="tabManagers">
       <h3>Area Manager Accounts</h3>
       <p class="hint">Create login accounts for area managers here. They will log in from the same login screen.</p>
@@ -377,7 +396,7 @@
 
     <div class="tab-panel card" id="tabActivity">
       <h3>Activity Log</h3>
-      <p class="hint">Login times and submission times for everyone.</p>
+      <p class="hint">Login times and submission times for everyone. Entries older than 30 days are deleted automatically.</p>
       <div class="table-wrap">
         <table id="activityTable">
           <thead><tr><th>Time</th><th>Type</th><th>Name</th><th>Details</th></tr></thead>
@@ -385,6 +404,14 @@
         </table>
       </div>
       <div class="empty" id="activityEmpty" style="display:none;">No activity yet.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabSetup">
+      <h3>One-Time Setup</h3>
+      <p class="hint">Step 1: Migrate everyone to secure Firebase Authentication logins. Step 2 (after confirming logins work): permanently delete the old plaintext password records.</p>
+      <button type="button" class="secondary" id="migrateBtn">1. Migrate accounts to secure login</button>
+      <button type="button" class="secondary" id="deleteOldBtn" style="margin-left:10px;">2. Delete old insecure records</button>
+      <p class="hint" id="migrateStatus" style="margin-top:10px;"></p>
     </div>
   </div>
 </div>
@@ -450,6 +477,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 // ============= CONFIG =============
 const CONFIG = {
@@ -465,9 +493,27 @@ const CONFIG = {
   TILLS_COLLECTION: "tillClosings",
   COLLECTIONS_COLLECTION: "cashCollections",
   MANAGERS_COLLECTION: "areaManagers",
+  BRANCH_LOGINS_COLLECTION: "branchLogins",
+  ADMIN_LOGINS_COLLECTION: "adminLogins",
+  USERS_COLLECTION: "users",
+  BRANCH_NAMES_COLLECTION: "branchNames",
   ACTIVITY_COLLECTION: "activityLog",
+  ACTIVITY_RETENTION_DAYS: 30, // activity log entries older than this are auto-deleted
+  FAKE_EMAIL_DOMAIN: "branch.internal", // username -> username@branch.internal for Firebase Auth
 
-  BRANCH_LOGINS: [
+  SHIFT_SPLIT_HOUR: 15,
+  DAY_START_HOUR: 3
+};
+// ================================================================
+
+// ---- ONE-TIME MIGRATION SEED ----
+// This holds the OLD hardcoded logins so they can be pushed into Firestore once.
+// After you run the migration (Admin > Setup tab) and confirm it worked, tell
+// me and I will send you a cleaned file with this block removed completely,
+// so no password will exist in the page source anymore.
+const MIGRATION_SEED = {
+  admin: { username: "admin", password: "op998800" },
+  branches: [
     { username: "sadyan", password: "10234", branch: "Sadyan branch" },
     { username: "jamyeen", password: "20456", branch: "Jamyeen branch" },
     { username: "wadi", password: "30678", branch: "Wadi branch" },
@@ -476,18 +522,15 @@ const CONFIG = {
     { username: "madina", password: "60345", branch: "Madina branch" },
     { username: "nugra", password: "70567", branch: "Nugra branch" },
     { username: "rajhi", password: "80789", branch: "Rajhi branch" }
-  ],
-
-  ADMIN_LOGIN: { username: "admin", password: "op998800" },
-
-  SHIFT_SPLIT_HOUR: 15,
-  DAY_START_HOUR: 3
+  ]
 };
-// ================================================================
 
 const firebaseApp = firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = firebase.firestore();
+const auth = firebaseApp.auth();
 const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
+function emailFor(username){ return username.toLowerCase().trim() + '@' + CONFIG.FAKE_EMAIL_DOMAIN; }
+function ensureMinPassword(pw){ let p = String(pw); while(p.length < 6) p += '0'; return p; }
 
 function pad(n){ return String(n).padStart(2,'0'); }
 function todayStr(){ const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
@@ -535,77 +578,139 @@ async function logActivity(type, name, details){
   }catch(e){ /* non-fatal */ }
 }
 
+// Cached branch list, loaded from Firestore (branchLogins collection)
+let BRANCH_LIST = [];
+let branchListLoaded = false;
+async function loadBranchList(force){
+  if(branchListLoaded && !force) return BRANCH_LIST;
+  const snap = await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).get();
+  BRANCH_LIST = [];
+  snap.forEach(d => BRANCH_LIST.push({ id: d.id, branch: d.data().name }));
+  BRANCH_LIST.sort((a,b) => (a.branch||'').localeCompare(b.branch||''));
+  branchListLoaded = true;
+  return BRANCH_LIST;
+}
+
 function populateBranchSelect(sel, includeBlank){
+  sel.querySelectorAll('option[data-dyn]').forEach(o => o.remove());
   if(includeBlank){
-    const opt = document.createElement('option'); opt.value=''; opt.textContent='Select branch'; sel.appendChild(opt);
+    const opt = document.createElement('option'); opt.value=''; opt.textContent='Select branch'; opt.dataset.dyn='1'; sel.appendChild(opt);
   }
-  CONFIG.BRANCH_LOGINS.forEach(b=>{
-    const opt = document.createElement('option'); opt.value=b.branch; opt.textContent=b.branch; sel.appendChild(opt);
+  BRANCH_LIST.forEach(b=>{
+    const opt = document.createElement('option'); opt.value=b.branch; opt.textContent=b.branch; opt.dataset.dyn='1'; sel.appendChild(opt);
   });
+}
+
+// The very first admin login (old system) upgrades itself into a real, secure
+// Firebase Authentication account automatically, so everything after that
+// works under the new security rules.
+async function bootstrapAdminIfNeeded(username, password){
+  const pw = ensureMinPassword(password);
+  try{
+    const cred = await auth.createUserWithEmailAndPassword(emailFor(username), pw);
+    await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).set({ role: 'admin', username });
+    try{ await db.collection('system').doc('bootstrap').set({ adminCreated: true }); }catch(e){ /* non-fatal */ }
+    routeToApp({ role: 'admin', username });
+  }catch(err){
+    if(err.code === 'auth/email-already-in-use'){
+      try{
+        const cred = await auth.signInWithEmailAndPassword(emailFor(username), pw);
+        const profSnap = await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).get();
+        routeToApp(profSnap.exists ? profSnap.data() : { role: 'admin', username });
+      }catch(e2){
+        routeToApp({ role: 'admin', username }, true);
+      }
+    } else {
+      routeToApp({ role: 'admin', username }, true);
+    }
+  }
 }
 
 // ===== UNIFIED LOGIN =====
 document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
-  const u = document.getElementById('loginUser').value.trim();
+  const uRaw = document.getElementById('loginUser').value.trim();
+  const u = uRaw.toLowerCase();
   const p = document.getElementById('loginPass').value;
   const err = document.getElementById('loginError');
   err.classList.remove('show');
+  const debugNotes = [];
 
-  // 1. Admin
-  if(u.toLowerCase() === CONFIG.ADMIN_LOGIN.username.toLowerCase() && p === CONFIG.ADMIN_LOGIN.password){
-    document.getElementById('loginOverlay').style.display = 'none';
-    document.getElementById('adminApp').style.display = 'block';
-    logActivity('login', 'Admin', 'Admin logged in');
-    initAdminApp();
-    return;
-  }
-
-  // 2. Branch / Cashier
-  const branchMatch = CONFIG.BRANCH_LOGINS.find(b => b.username.toLowerCase() === u.toLowerCase() && b.password === p);
-  if(branchMatch){
-    currentBranch = branchMatch.branch;
-    currentBranchSlug = slugify(branchMatch.branch);
-    document.getElementById('loginOverlay').style.display = 'none';
-    document.getElementById('branchApp').style.display = 'block';
-    document.getElementById('sessionBranchName').textContent = branchMatch.branch;
-    document.getElementById('currentBranchLabel').textContent = branchMatch.branch;
-    logActivity('login', branchMatch.branch, 'Branch cashier logged in');
-    initBranchApp();
-    return;
-  }
-
-  // 3. Area Manager (Firestore)
+  // --- PATH A: secure Firebase Authentication (used once an account has been migrated) ---
   try{
-    const snap = await db.collection(CONFIG.MANAGERS_COLLECTION).doc(u.toLowerCase()).get();
-    if(snap.exists && snap.data().password === p){
-      currentManagerName = snap.data().name;
-      document.getElementById('loginOverlay').style.display = 'none';
-      document.getElementById('managerApp').style.display = 'block';
-      document.getElementById('sessionManagerName').textContent = currentManagerName;
-      logActivity('login', currentManagerName, 'Area manager logged in');
-      initManagerApp();
+    const cred = await auth.signInWithEmailAndPassword(emailFor(u), p);
+    const profSnap = await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).get();
+    if(profSnap.exists){
+      routeToApp(profSnap.data());
       return;
     }
-  }catch(e2){ /* fallthrough to error */ }
+    debugNotes.push('Secure account exists but has no profile in "users" collection.');
+    await auth.signOut();
+  }catch(authErr){ debugNotes.push('Secure login: ' + authErr.code); }
 
+  // --- PATH B: one-time bootstrap using old Firestore-stored accounts (only works until you migrate + delete them) ---
+  try{
+    const aSnap = await db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).doc(u).get();
+    if(aSnap.exists && aSnap.data().password === p){
+      await bootstrapAdminIfNeeded(u, p);
+      return;
+    }
+    debugNotes.push('adminLogins/' + u + ': ' + (aSnap.exists ? 'found, password did not match' : 'no document found'));
+  }catch(e0){ debugNotes.push('adminLogins read error: ' + e0.message); }
+  try{
+    const bSnap = await db.collection(CONFIG.BRANCH_LOGINS_COLLECTION).doc(u).get();
+    if(bSnap.exists && bSnap.data().password === p){
+      routeToApp({ role: 'branch', username: u, branch: bSnap.data().branch }, true);
+      return;
+    }
+  }catch(e1){ debugNotes.push('branchLogins read error: ' + e1.message); }
+  try{
+    const mSnap = await db.collection(CONFIG.MANAGERS_COLLECTION).doc(u).get();
+    if(mSnap.exists && mSnap.data().password === p){
+      routeToApp({ role: 'manager', username: u, name: mSnap.data().name }, true);
+      return;
+    }
+  }catch(e2){ debugNotes.push('areaManagers read error: ' + e2.message); }
+
+  err.textContent = 'Incorrect username or password. (' + debugNotes.join(' | ') + ')';
   err.classList.add('show');
 });
 
-document.getElementById('branchLogoutBtn').addEventListener('click', ()=> location.reload());
-document.getElementById('managerLogoutBtn').addEventListener('click', ()=> location.reload());
-document.getElementById('adminLogoutBtn').addEventListener('click', ()=> location.reload());
+function routeToApp(profile, viaOldSystem){
+  document.getElementById('loginOverlay').style.display = 'none';
+  if(profile.role === 'admin'){
+    document.getElementById('adminApp').style.display = 'block';
+    logActivity('login', 'Admin', 'Admin logged in' + (viaOldSystem ? ' (old system — please migrate)' : ''));
+    initAdminApp();
+  } else if(profile.role === 'branch'){
+    currentBranch = profile.branch;
+    currentBranchSlug = slugify(profile.branch);
+    document.getElementById('branchApp').style.display = 'block';
+    document.getElementById('sessionBranchName').textContent = profile.branch;
+    document.getElementById('currentBranchLabel').textContent = profile.branch;
+    logActivity('login', profile.branch, 'Branch cashier logged in' + (viaOldSystem ? ' (old system)' : ''));
+    initBranchApp();
+  } else if(profile.role === 'manager'){
+    currentManagerName = profile.name || profile.username;
+    document.getElementById('managerApp').style.display = 'block';
+    document.getElementById('sessionManagerName').textContent = currentManagerName;
+    logActivity('login', currentManagerName, 'Area manager logged in' + (viaOldSystem ? ' (old system)' : ''));
+    initManagerApp();
+  }
+}
+
+document.getElementById('branchLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
+document.getElementById('managerLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
+document.getElementById('adminLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 
 // ===== BRANCH / CASHIER APP =====
 let currentBranch = null, currentBranchSlug = null;
 let currentTillId = null, currentTillData = null;
 
 async function initBranchApp(){
-  populateBranchSelect(document.getElementById('staffBranchFilter'), false);
   document.getElementById('saveOpenBtn').disabled = true;
   document.getElementById('closeBtn').disabled = true;
   await loadCurrentShift();
-  document.getElementById('staffBranchFilter').addEventListener('change', loadBranchReport);
   document.getElementById('staffDateFilter').addEventListener('change', loadBranchReport);
   loadBranchReport();
 }
@@ -732,12 +837,11 @@ function renderTillRows(rows, tbodyId, emptyId, withActions){
 }
 
 async function loadBranchReport(){
-  const branchVal = document.getElementById('staffBranchFilter').value;
   const dateVal = document.getElementById('staffDateFilter').value;
-  const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
+  let query = db.collection(CONFIG.TILLS_COLLECTION).where('branch', '==', currentBranch);
+  const snap = await query.get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
-  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
   if(dateVal) rows = rows.filter(r => r.businessDate === dateVal);
   rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
   renderTillRows(rows, 'staffReportBody', 'staffReportEmpty', false);
@@ -746,8 +850,9 @@ async function loadBranchReport(){
 // ===== AREA MANAGER APP =====
 let currentManagerName = null;
 
-function initManagerApp(){
+async function initManagerApp(){
   document.getElementById('cDate').value = todayStr();
+  await loadBranchList();
   populateBranchSelect(document.getElementById('cBranch'), true);
   populateBranchSelect(document.getElementById('mgrBranchFilter'), false);
 
@@ -874,7 +979,8 @@ async function loadManagerReport(){
 // ===== ADMIN APP =====
 let cachedTillRows = [], cachedCollRows = [];
 
-function initAdminApp(){
+async function initAdminApp(){
+  try{ await loadBranchList(); }catch(e){ showToast('Could not load branch list: ' + e.message, true); }
   populateBranchSelect(document.getElementById('adminTillBranchFilter'), false);
   populateBranchSelect(document.getElementById('adminCollBranchFilter'), false);
   populateBranchSelect(document.getElementById('ecBranch'), false);
@@ -885,6 +991,7 @@ function initAdminApp(){
       document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById(btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'tabBranches') loadBranchesList();
       if(btn.dataset.tab === 'tabManagers') loadManagersList();
       if(btn.dataset.tab === 'tabActivity') loadActivityLog();
     });
@@ -907,6 +1014,9 @@ function initAdminApp(){
   });
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
+  document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
+  document.getElementById('migrateBtn').addEventListener('click', runMigration);
+  document.getElementById('deleteOldBtn').addEventListener('click', deleteOldInsecureRecords);
   document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
   document.getElementById('cancelTillEditBtn').addEventListener('click', ()=> document.getElementById('editTillModal').classList.remove('show'));
   document.getElementById('saveCollEditBtn').addEventListener('click', saveCollEdit);
@@ -1013,14 +1123,38 @@ async function saveCollEdit(){
   }catch(err){ showToast('Error: ' + err.message, true); }
 }
 
+function getSecondaryAuth(){
+  const app = firebase.apps.find(a => a.name === 'Secondary') || firebase.initializeApp(CONFIG.FIREBASE_CONFIG, 'Secondary');
+  return app.auth();
+}
+
+async function createSecureAccount(username, password, profile){
+  username = username.toLowerCase().trim();
+  const pw = ensureMinPassword(password);
+  const secAuth = getSecondaryAuth();
+  let uid;
+  try{
+    const cred = await secAuth.createUserWithEmailAndPassword(emailFor(username), pw);
+    uid = cred.user.uid;
+  }catch(err){
+    if(err.code === 'auth/email-already-in-use'){
+      const cred = await secAuth.signInWithEmailAndPassword(emailFor(username), pw);
+      uid = cred.user.uid;
+    } else { throw err; }
+  }
+  await db.collection(CONFIG.USERS_COLLECTION).doc(uid).set({ ...profile, username }, { merge: true });
+  await secAuth.signOut();
+  return { uid, pw };
+}
+
 async function addAreaManager(){
   const name = document.getElementById('newMgrName').value.trim();
   const username = document.getElementById('newMgrUser').value.trim().toLowerCase();
   const password = document.getElementById('newMgrPass').value.trim();
   if(!name || !username || !password){ showToast('Sab fields bharein', true); return; }
   try{
-    await db.collection(CONFIG.MANAGERS_COLLECTION).doc(username).set({ name, username, password });
-    showToast('Area manager added');
+    const { pw } = await createSecureAccount(username, password, { role: 'manager', name });
+    showToast(pw === password ? 'Area manager added' : `Area manager added — password saved as "${pw}" (min 6 characters required)`);
     document.getElementById('newMgrName').value = '';
     document.getElementById('newMgrUser').value = '';
     document.getElementById('newMgrPass').value = '';
@@ -1028,8 +1162,111 @@ async function addAreaManager(){
   }catch(err){ showToast('Error: ' + err.message, true); }
 }
 
+async function addBranchLogin(){
+  const branch = document.getElementById('newBranchName').value.trim();
+  const username = document.getElementById('newBranchUser').value.trim().toLowerCase();
+  const password = document.getElementById('newBranchPass').value.trim();
+  if(!branch || !username || !password){ showToast('Sab fields bharein', true); return; }
+  try{
+    const { pw } = await createSecureAccount(username, password, { role: 'branch', branch });
+    await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(slugify(branch)).set({ name: branch });
+    showToast(pw === password ? 'Branch account added' : `Branch account added — password saved as "${pw}" (min 6 characters required)`);
+    document.getElementById('newBranchName').value = '';
+    document.getElementById('newBranchUser').value = '';
+    document.getElementById('newBranchPass').value = '';
+    await loadBranchList(true);
+    loadBranchesList();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+async function loadBranchesList(){
+  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','branch').get();
+  const tbody = document.getElementById('branchListBody');
+  const empty = document.getElementById('branchListEmpty');
+  tbody.innerHTML = '';
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  rows.sort((a,b) => (a.branch||'').localeCompare(b.branch||''));
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.branch}</td><td>${r.username}</td><td>Secured in Firebase Authentication</td>
+      <td><button type="button" class="link-btn del" data-branchdel="${r.id}">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-branchdel]').forEach(btn => btn.addEventListener('click', async ()=>{
+    if(!confirm('Remove this branch account\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
+    await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.branchdel).delete();
+    loadBranchesList();
+  }));
+}
+
+async function runMigration(){
+  const statusEl = document.getElementById('migrateStatus');
+  if(!confirm('This creates real, secure Firebase-Authentication logins for every current Admin, Branch, and Area Manager account. Safe to run more than once. Continue?')) return;
+  statusEl.textContent = 'Migrating... please wait, this can take a bit for many accounts.';
+  const notes = [];
+  try{
+    // Admin(s)
+    const adminSnap = await db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).get();
+    const adminList = adminSnap.empty ? [MIGRATION_SEED.admin] : adminSnap.docs.map(d => d.data());
+    for(const d of adminList){
+      const { pw } = await createSecureAccount(d.username, d.password, { role: 'admin' });
+      if(pw !== d.password) notes.push(`Admin "${d.username}" new password: ${pw}`);
+    }
+
+    // Branches
+    const branchSnap = await db.collection(CONFIG.BRANCH_LOGINS_COLLECTION).get();
+    const branchList = branchSnap.empty ? MIGRATION_SEED.branches : branchSnap.docs.map(d => d.data());
+    for(const d of branchList){
+      const { pw } = await createSecureAccount(d.username, d.password, { role: 'branch', branch: d.branch });
+      await db.collection(CONFIG.BRANCH_NAMES_COLLECTION).doc(slugify(d.branch)).set({ name: d.branch });
+      if(pw !== d.password) notes.push(`Branch "${d.branch}" (${d.username}) new password: ${pw}`);
+    }
+
+    // Area Managers
+    const mgrSnap = await db.collection(CONFIG.MANAGERS_COLLECTION).get();
+    for(const doc of mgrSnap.docs){
+      const d = doc.data();
+      const { pw } = await createSecureAccount(d.username, d.password, { role: 'manager', name: d.name });
+      if(pw !== d.password) notes.push(`Manager "${d.name}" (${d.username}) new password: ${pw}`);
+    }
+
+    await loadBranchList(true);
+    loadBranchesList();
+    loadManagersList();
+    let msg = 'Done — every account now has a secure Firebase Authentication login.';
+    if(notes.length){ msg += ' Some old passwords were shorter than 6 characters (Firebase\'s minimum), so a "0" was added — note the new passwords below and share them with the affected people: ' + notes.join(' | '); }
+    msg += ' Next, click "Delete old insecure records" below once you have confirmed everyone can log in.';
+    statusEl.textContent = msg;
+    showToast('Migration complete');
+  }catch(err){
+    statusEl.textContent = 'Error: ' + err.message;
+    showToast('Migration failed: ' + err.message, true);
+  }
+}
+
+async function deleteOldInsecureRecords(){
+  const statusEl = document.getElementById('migrateStatus');
+  if(!confirm('This permanently deletes the old plaintext-password records (adminLogins, branchLogins, areaManagers). Only do this AFTER confirming everyone can log in with the new secure system. Continue?')) return;
+  try{
+    for(const colName of [CONFIG.ADMIN_LOGINS_COLLECTION, CONFIG.BRANCH_LOGINS_COLLECTION, CONFIG.MANAGERS_COLLECTION]){
+      const snap = await db.collection(colName).get();
+      const batch = db.batch();
+      snap.forEach(d => batch.delete(d.ref));
+      if(!snap.empty) await batch.commit();
+    }
+    statusEl.textContent = 'Old plaintext password records deleted. The app now runs entirely on secure Firebase Authentication.';
+    showToast('Old records deleted');
+  }catch(err){
+    statusEl.textContent = 'Error deleting old records: ' + err.message;
+    showToast('Delete failed: ' + err.message, true);
+  }
+}
+
 async function loadManagersList(){
-  const snap = await db.collection(CONFIG.MANAGERS_COLLECTION).get();
+  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','manager').get();
   const tbody = document.getElementById('mgrListBody');
   const empty = document.getElementById('mgrListEmpty');
   tbody.innerHTML = '';
@@ -1039,21 +1276,42 @@ async function loadManagersList(){
   empty.style.display = 'none';
   rows.forEach(r=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.name}</td><td>${r.username}</td><td>${r.password}</td>
+    tr.innerHTML = `<td>${r.name}</td><td>${r.username}</td><td>Secured in Firebase Authentication</td>
       <td><button type="button" class="link-btn del" data-mgrdel="${r.id}">Delete</button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('[data-mgrdel]').forEach(btn => btn.addEventListener('click', async ()=>{
-    if(!confirm('Delete this area manager account?')) return;
-    await db.collection(CONFIG.MANAGERS_COLLECTION).doc(btn.dataset.mgrdel).delete();
+    if(!confirm('Remove this area manager\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
+    await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.mgrdel).delete();
     loadManagersList();
   }));
 }
 
 async function loadActivityLog(){
   const snap = await db.collection(CONFIG.ACTIVITY_COLLECTION).get();
-  const rows = [];
+  let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+
+  // Auto-delete: activity log entries older than 30 days are permanently removed
+  const cutoffTime = Date.now() - (CONFIG.ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const oldRows = rows.filter(r => {
+    const t = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().getTime() : 0;
+    return t > 0 && t < cutoffTime;
+  });
+  if(oldRows.length){
+    try{
+      // Firestore batches max out at 500 writes, so chunk to be safe
+      for(let i = 0; i < oldRows.length; i += 400){
+        const chunk = oldRows.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(r => batch.delete(db.collection(CONFIG.ACTIVITY_COLLECTION).doc(r.id)));
+        await batch.commit();
+      }
+    }catch(e){ /* non-fatal — old rows will just be purged next time */ }
+    const deletedIds = new Set(oldRows.map(r => r.id));
+    rows = rows.filter(r => !deletedIds.has(r.id));
+  }
+
   rows.sort((a,b) => {
     const ta = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
     const tb = b.timestamp && b.timestamp.toDate ? b.timestamp.toDate().getTime() : 0;
