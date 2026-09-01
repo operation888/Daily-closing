@@ -402,7 +402,6 @@
     <div class="tab-panel card" id="tabActivity">
       <h3>Activity Log</h3>
       <p class="hint">Login times and submission times for everyone. Entries older than 30 days are deleted automatically.</p>
-      <button type="button" class="secondary" id="clearWeekActivityBtn" style="margin-bottom:14px;">Delete Entries Older Than 7 Days</button>
       <div class="table-wrap">
         <table id="activityTable">
           <thead><tr><th>Time</th><th>Type</th><th>Name</th><th>Details</th></tr></thead>
@@ -1399,41 +1398,30 @@ async function loadManagersList(){
   }));
 }
 
-// Deletes activity log entries older than `days`. Returns how many were removed.
-async function purgeOldActivity(days){
-  const cutoffTime = Date.now() - (days * 24 * 60 * 60 * 1000);
-  const snap = await db.collection(CONFIG.ACTIVITY_COLLECTION).get();
-  const oldIds = [];
-  snap.forEach(d => {
-    const ts = d.data().timestamp;
-    const t = ts && ts.toDate ? ts.toDate().getTime() : 0;
-    if(t > 0 && t < cutoffTime) oldIds.push(d.id);
-  });
-  for(let i = 0; i < oldIds.length; i += 400){
-    const chunk = oldIds.slice(i, i + 400);
-    const batch = db.batch();
-    chunk.forEach(id => batch.delete(db.collection(CONFIG.ACTIVITY_COLLECTION).doc(id)));
-    await batch.commit();
-  }
-  return oldIds.length;
-}
-
-document.getElementById('clearWeekActivityBtn').addEventListener('click', async ()=>{
-  if(!confirm('Delete all activity log entries older than 7 days? This cannot be undone.')) return;
-  try{
-    const count = await purgeOldActivity(7);
-    showToast(count ? `Deleted ${count} record${count === 1 ? '' : 's'} older than 7 days` : 'No records older than 7 days found');
-    loadActivityLog();
-  }catch(err){ showToast('Error: ' + err.message, true); }
-});
-
 async function loadActivityLog(){
-  // Auto-delete: activity log entries older than the retention window are permanently removed
-  try{ await purgeOldActivity(CONFIG.ACTIVITY_RETENTION_DAYS); }catch(e){ /* non-fatal — purged next time */ }
-
   const snap = await db.collection(CONFIG.ACTIVITY_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+
+  // Auto-delete: activity log entries older than 30 days are permanently removed
+  const cutoffTime = Date.now() - (CONFIG.ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const oldRows = rows.filter(r => {
+    const t = r.timestamp && r.timestamp.toDate ? r.timestamp.toDate().getTime() : 0;
+    return t > 0 && t < cutoffTime;
+  });
+  if(oldRows.length){
+    try{
+      // Firestore batches max out at 500 writes, so chunk to be safe
+      for(let i = 0; i < oldRows.length; i += 400){
+        const chunk = oldRows.slice(i, i + 400);
+        const batch = db.batch();
+        chunk.forEach(r => batch.delete(db.collection(CONFIG.ACTIVITY_COLLECTION).doc(r.id)));
+        await batch.commit();
+      }
+    }catch(e){ /* non-fatal — old rows will just be purged next time */ }
+    const deletedIds = new Set(oldRows.map(r => r.id));
+    rows = rows.filter(r => !deletedIds.has(r.id));
+  }
 
   rows.sort((a,b) => {
     const ta = a.timestamp && a.timestamp.toDate ? a.timestamp.toDate().getTime() : 0;
