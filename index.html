@@ -32,6 +32,8 @@
   .login-error{display:none;background:var(--alert-bg);color:var(--alert);border:1px solid #D9B9B4;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
   .login-error.show{display:block;}
   #branchApp,#managerApp,#adminApp{display:none;}
+  #globalRefreshBtn.spinning{animation:gRefreshSpin .7s linear;}
+  @keyframes gRefreshSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
   .session-bar{display:flex;align-items:center;justify-content:space-between;background:var(--green-deep);color:var(--beige-2);padding:9px 16px;font-size:12.5px;flex-wrap:wrap;gap:6px;}
   .session-bar button{background:transparent;border:1px solid var(--beige-2);color:var(--beige-2);border-radius:7px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:Georgia,serif;}
@@ -364,8 +366,7 @@
       <h3>All Till Closing Records</h3>
       <div class="admin-filters">
         <select id="adminTillBranchFilter"><option value="">All branches</option></select>
-        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminTillDateFrom" style="width:auto;display:inline-block;"></label>
-        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminTillDateTo" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">Date <input type="date" id="adminTillDate" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearTillFiltersBtn">Clear Filters</button>
       </div>
       <div class="table-wrap">
@@ -418,7 +419,9 @@
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminSyncDateFrom" style="width:auto;display:inline-block;"></label>
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminSyncDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearSyncFiltersBtn">Clear Filters</button>
+        <button type="button" class="secondary" id="cleanupOldPhotosBtn" style="color:var(--alert);">🧹 Cleanup old photos</button>
       </div>
+      <div class="hint" id="cleanupHint" style="margin-top:-4px;margin-bottom:10px;">Sync photos older than 30 days are deleted automatically every time this dashboard is opened. Use the button to run it manually right now.</div>
       <div class="table-wrap">
         <table id="adminSyncTable">
           <thead><tr>
@@ -603,6 +606,11 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<button type="button" id="globalRefreshBtn" title="Refresh" aria-label="Refresh"
+  style="display:none;position:fixed;bottom:20px;right:20px;width:48px;height:48px;border-radius:50%;
+  background:var(--green);color:var(--beige);border:none;box-shadow:0 6px 16px rgba(0,0,0,.25);
+  font-size:20px;cursor:pointer;z-index:9999;align-items:center;justify-content:center;">⟳</button>
 
 <div class="config-hint" style="max-width:1100px;margin-left:auto;margin-right:auto;">
   Set <code>CONFIG.FIREBASE_CONFIG</code> below with your Firebase project's keys before using this in production.
@@ -827,6 +835,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e)=>{
 
 function routeToApp(profile, viaOldSystem){
   document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('globalRefreshBtn').style.display = 'flex';
   if(profile.role === 'admin'){
     document.getElementById('adminApp').style.display = 'block';
     logActivity('login', 'Admin', 'Admin logged in' + (viaOldSystem ? ' (old system — please migrate)' : ''));
@@ -852,6 +861,38 @@ function routeToApp(profile, viaOldSystem){
 document.getElementById('branchLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 document.getElementById('managerLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 document.getElementById('adminLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
+
+// ===== Small corner refresh button — reloads only the current screen's data, no logout, no navigation =====
+function refreshCurrentView(){
+  const btn = document.getElementById('globalRefreshBtn');
+  btn.classList.remove('spinning');
+  void btn.offsetWidth; // restart animation if clicked again quickly
+  btn.classList.add('spinning');
+
+  const tasks = [];
+  if(document.getElementById('adminApp').style.display === 'block'){
+    const activeTab = document.querySelector('#adminApp .tab-btn.active')?.dataset.tab;
+    if(activeTab === 'tabTill') tasks.push(loadAdminTillReport());
+    else if(activeTab === 'tabCollections') tasks.push(loadAdminCollReport());
+    else if(activeTab === 'tabSyncs') tasks.push(loadAdminSyncReport());
+    else if(activeTab === 'tabBranches') tasks.push(loadBranchesList());
+    else if(activeTab === 'tabManagers') tasks.push(loadManagersList());
+    else if(activeTab === 'tabActivity') tasks.push(loadActivityLog());
+  } else if(document.getElementById('branchApp').style.display === 'block'){
+    tasks.push(loadCurrentShift());
+    tasks.push(loadSyncStatuses());
+    tasks.push(loadBranchReport());
+  } else if(document.getElementById('managerApp').style.display === 'block'){
+    tasks.push(loadTillReference());
+    tasks.push(loadManagerReport());
+  }
+
+  Promise.all(tasks)
+    .then(()=> showToast('Refreshed'))
+    .catch((e)=> showToast('Refresh failed: ' + e.message, true));
+}
+document.getElementById('globalRefreshBtn').addEventListener('click', refreshCurrentView);
+
 
 function openNoteModal(text){
   document.getElementById('viewNoteText').textContent = text && text.trim() ? text : 'No note added for this record.';
@@ -1224,6 +1265,13 @@ function syncDocId(managerUsername, date, shiftKey, syncType){
   return `${managerUsername}_${date}_${shiftKey}_${syncType}`;
 }
 
+function isMobileDevice(){
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const uaMobile = /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua);
+  const touchAndNarrow = ('ontouchstart' in window) && window.innerWidth <= 900;
+  return uaMobile || touchAndNarrow;
+}
+
 function initSyncTasks(){
   const shift = getSyncShiftInfo();
   document.getElementById('syncShiftLabel').textContent = shift.label;
@@ -1232,6 +1280,15 @@ function initSyncTasks(){
   document.querySelectorAll('[data-syncbtn]').forEach(btn => {
     btn.addEventListener('click', () => openSyncModal(btn.dataset.syncbtn));
   });
+
+  if(!isMobileDevice()){
+    const banner = document.getElementById('syncShiftLabel').closest('.card') || document.getElementById('syncRowsWrap');
+    const notice = document.createElement('div');
+    notice.className = 'sync-shift-banner';
+    notice.style.background = '#fdecea';
+    notice.innerHTML = '<strong>Mobile only:</strong> Sync tasks sirf mobile phone se hi kiye ja sakte hain (live camera photo required). Laptop/desktop se sync submit nahi ho sakta.';
+    document.getElementById('syncRowsWrap').parentElement.insertBefore(notice, document.getElementById('syncRowsWrap'));
+  }
 
   document.getElementById('syncPhotoInput').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -1254,6 +1311,10 @@ function initSyncTasks(){
 }
 
 function openSyncModal(syncType){
+  if(!isMobileDevice()){
+    showToast('Sync sirf mobile se hi kiya ja sakta hai. Kripya apne mobile phone par yeh dashboard khol kar live photo lein.');
+    return;
+  }
   currentSyncType = syncType;
   currentSyncPhotoFile = null;
   const typeInfo = SYNC_TYPES.find(t => t.key === syncType);
@@ -1342,6 +1403,9 @@ async function initAdminApp(){
   populateBranchSelect(document.getElementById('ecBranch'), false);
   populateBranchSelect(document.getElementById('adminSyncBranchFilter'), false);
 
+  // Auto-delete sync photos older than 30 days every time the admin dashboard is opened
+  autoCleanupOldSyncPhotos().catch(()=>{});
+
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -1356,12 +1420,10 @@ async function initAdminApp(){
   });
 
   document.getElementById('adminTillBranchFilter').addEventListener('change', loadAdminTillReport);
-  document.getElementById('adminTillDateFrom').addEventListener('change', loadAdminTillReport);
-  document.getElementById('adminTillDateTo').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDate').addEventListener('change', loadAdminTillReport);
   document.getElementById('clearTillFiltersBtn').addEventListener('click', ()=>{
     document.getElementById('adminTillBranchFilter').value = '';
-    document.getElementById('adminTillDateFrom').value = '';
-    document.getElementById('adminTillDateTo').value = '';
+    document.getElementById('adminTillDate').value = '';
     loadAdminTillReport();
   });
 
@@ -1388,6 +1450,7 @@ async function initAdminApp(){
     loadAdminSyncReport();
   });
   document.getElementById('closeSyncPhotoModalBtn').addEventListener('click', ()=> document.getElementById('viewSyncPhotoModal').classList.remove('show'));
+  document.getElementById('cleanupOldPhotosBtn').addEventListener('click', cleanupOldSyncPhotos);
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
@@ -1404,14 +1467,12 @@ async function initAdminApp(){
 
 async function loadAdminTillReport(){
   const branchVal = document.getElementById('adminTillBranchFilter').value;
-  const fromVal = document.getElementById('adminTillDateFrom').value;
-  const toVal = document.getElementById('adminTillDateTo').value;
+  const dateVal = document.getElementById('adminTillDate').value;
   const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(fromVal) rows = rows.filter(r => (r.businessDate || '') >= fromVal);
-  if(toVal) rows = rows.filter(r => (r.businessDate || '') <= toVal);
+  if(dateVal) rows = rows.filter(r => (r.businessDate || '') === dateVal);
   rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
   cachedTillRows = rows;
   renderTillRows(rows, 'adminTillBody', 'adminTillEmpty', true);
@@ -1518,8 +1579,57 @@ async function markFilteredCollectionsDone(){
 }
 
 const SYNC_TYPE_LABELS = { data: 'Sync Data', number: 'Sync Number', users: 'Sync Users' };
+const SYNC_PHOTO_RETENTION_DAYS = 30; // sync photos older than this are auto-deleted
+
+async function autoCleanupOldSyncPhotos(){
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - SYNC_PHOTO_RETENTION_DAYS);
+  const cutoffStr = `${cutoff.getFullYear()}-${pad(cutoff.getMonth()+1)}-${pad(cutoff.getDate())}`;
+
+  const snap = await db.collection(CONFIG.SYNC_COLLECTION).get();
+  const oldDocs = [];
+  snap.forEach(d => {
+    const data = d.data();
+    if((data.date || '') < cutoffStr) oldDocs.push({ id: d.id, ...data });
+  });
+
+  if(oldDocs.length === 0) return 0;
+
+  let done = 0;
+  for(const rec of oldDocs){
+    try{
+      if(rec.photoURL){
+        try{ await storage.refFromURL(rec.photoURL).delete(); }
+        catch(e){ /* photo may already be missing — ignore and still remove the record */ }
+      }
+      await db.collection(CONFIG.SYNC_COLLECTION).doc(rec.id).delete();
+      done++;
+    }catch(e){ /* non-fatal — will be retried next time this tab loads */ }
+  }
+  return done;
+}
+
+async function cleanupOldSyncPhotos(){
+  const btn = document.getElementById('cleanupOldPhotosBtn');
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = 'Cleaning up...';
+  try{
+    const done = await autoCleanupOldSyncPhotos();
+    showToast(done > 0 ? `Cleanup done — ${done} old photo${done===1?'':'s'} deleted` : `No sync photos older than ${SYNC_PHOTO_RETENTION_DAYS} days found`);
+    loadAdminSyncReport();
+  }catch(e){
+    showToast('Cleanup failed: ' + e.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
 
 async function loadAdminSyncReport(){
+  // Automatically purge sync photos older than 30 days every time this tab is opened/refreshed
+  try{ await autoCleanupOldSyncPhotos(); }catch(e){ /* non-fatal */ }
+
   const branchVal = document.getElementById('adminSyncBranchFilter').value;
   const typeVal = document.getElementById('adminSyncTypeFilter').value;
   const fromVal = document.getElementById('adminSyncDateFrom').value;
