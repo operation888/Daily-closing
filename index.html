@@ -73,6 +73,14 @@
   .status-badge.Pending{background:var(--pending-bg);color:var(--pending);}
   .status-badge.Done{background:var(--ok-bg);color:var(--ok);}
 
+  .sync-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line);flex-wrap:wrap;}
+  .sync-row:last-child{border-bottom:none;}
+  .sync-row .sync-label{font-weight:700;font-size:14px;color:var(--green);}
+  .sync-row .sync-meta{font-size:11.5px;color:var(--ink-soft);margin-top:2px;}
+  .sync-shift-banner{background:var(--beige-2);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;}
+  .sync-shift-banner strong{color:var(--green);}
+  .sync-thumb{width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:pointer;}
+
   .step-block{border:1px dashed var(--line);border-radius:12px;padding:16px;margin-bottom:14px;}
   .step-block.locked{opacity:.5;pointer-events:none;}
   .step-title{font-size:13px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
@@ -242,6 +250,35 @@
     </header>
 
     <div class="card">
+      <h3>Shift Sync Tasks</h3>
+      <p class="hint">Complete all 3 syncs once per shift window (12 AM–12 PM and 12 PM–12 AM), each with a live photo attached.</p>
+      <div class="sync-shift-banner">Current shift: <strong id="syncShiftLabel">—</strong> · <span id="syncDateLabel">—</span></div>
+      <div id="syncRowsWrap">
+        <div class="sync-row" data-synctype="data">
+          <div>
+            <div class="sync-label">1. Sync Data</div>
+            <div class="sync-meta" id="syncStatus-data">Not done yet for this shift</div>
+          </div>
+          <button type="button" class="secondary" data-syncbtn="data">Do Sync</button>
+        </div>
+        <div class="sync-row" data-synctype="number">
+          <div>
+            <div class="sync-label">2. Sync Number</div>
+            <div class="sync-meta" id="syncStatus-number">Not done yet for this shift</div>
+          </div>
+          <button type="button" class="secondary" data-syncbtn="number">Do Sync</button>
+        </div>
+        <div class="sync-row" data-synctype="users">
+          <div>
+            <div class="sync-label">3. Sync Users</div>
+            <div class="sync-meta" id="syncStatus-users">Not done yet for this shift</div>
+          </div>
+          <button type="button" class="secondary" data-syncbtn="users">Do Sync</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>New Collection Entry</h3>
       <p class="hint">Fields marked with * are required.</p>
       <div class="row">
@@ -316,6 +353,7 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" data-tab="tabTill">Till Closing</button>
       <button type="button" class="tab-btn" data-tab="tabCollections">Cash Collections</button>
+      <button type="button" class="tab-btn" data-tab="tabSyncs">Manager Syncs</button>
       <button type="button" class="tab-btn" data-tab="tabBranches">Branch Accounts</button>
       <button type="button" class="tab-btn" data-tab="tabManagers">Area Managers</button>
       <button type="button" class="tab-btn" data-tab="tabActivity">Activity Log</button>
@@ -364,6 +402,32 @@
         </table>
       </div>
       <div class="empty" id="adminCollEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabSyncs">
+      <h3>Manager Shift Syncs</h3>
+      <p class="hint">Data / Number / Users sync submitted by area managers, twice daily (12 AM–12 PM, 12 PM–12 AM), each with a live photo.</p>
+      <div class="admin-filters">
+        <select id="adminSyncManagerFilter"><option value="">All managers</option></select>
+        <select id="adminSyncTypeFilter">
+          <option value="">All sync types</option>
+          <option value="data">Sync Data</option>
+          <option value="number">Sync Number</option>
+          <option value="users">Sync Users</option>
+        </select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminSyncDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminSyncDateTo" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearSyncFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="adminSyncTable">
+          <thead><tr>
+            <th>Date</th><th>Shift</th><th>Manager</th><th>Sync Type</th><th>Time</th><th>Photo</th>
+          </tr></thead>
+          <tbody id="adminSyncBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="adminSyncEmpty" style="display:none;">No sync records found.</div>
     </div>
 
     <div class="tab-panel card" id="tabBranches">
@@ -508,6 +572,36 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="syncTaskModal">
+  <div class="modal-box" style="max-width:420px;">
+    <h3 id="syncModalTitle">Sync Data</h3>
+    <p class="hint" id="syncModalHint">Take a live photo as proof, then submit.</p>
+    <div class="row single">
+      <div>
+        <label>Live Photo *</label>
+        <input type="file" accept="image/*" capture="environment" id="syncPhotoInput">
+      </div>
+    </div>
+    <div id="syncPhotoPreviewWrap" style="display:none;margin-bottom:14px;">
+      <img id="syncPhotoPreview" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:6px;">
+      <button type="button" class="primary" id="submitSyncBtn" disabled>Submit</button>
+      <button type="button" class="secondary" id="cancelSyncBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="viewSyncPhotoModal">
+  <div class="modal-box" style="max-width:480px;">
+    <h3>Sync Photo</h3>
+    <img id="viewSyncPhotoImg" style="width:100%;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;">
+    <div style="display:flex;justify-content:flex-end;">
+      <button type="button" class="secondary" id="closeSyncPhotoModalBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="config-hint" style="max-width:1100px;margin-left:auto;margin-right:auto;">
@@ -517,6 +611,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script>
 // ============= CONFIG =============
 const CONFIG = {
@@ -538,6 +633,7 @@ const CONFIG = {
   BRANCH_NAMES_COLLECTION: "branchNames",
   ACTIVITY_COLLECTION: "activityLog",
   ACTIVITY_RETENTION_DAYS: 30, // activity log entries older than this are auto-deleted
+  SYNC_COLLECTION: "managerSyncs",
   FAKE_EMAIL_DOMAIN: "branch.internal", // username -> username@branch.internal for Firebase Auth
 
   SHIFT_SPLIT_HOUR: 15,
@@ -567,6 +663,7 @@ const MIGRATION_SEED = {
 const firebaseApp = firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = firebase.firestore();
 const auth = firebaseApp.auth();
+const storage = firebase.storage();
 const serverTimestamp = () => firebase.firestore.FieldValue.serverTimestamp();
 function emailFor(username){ return username.toLowerCase().trim() + '@' + CONFIG.FAKE_EMAIL_DOMAIN; }
 function ensureMinPassword(pw){ let p = String(pw); while(p.length < 6) p += '0'; return p; }
@@ -744,6 +841,7 @@ function routeToApp(profile, viaOldSystem){
     initBranchApp();
   } else if(profile.role === 'manager'){
     currentManagerName = profile.name || profile.username;
+    currentManagerUsername = profile.username || slugify(currentManagerName);
     document.getElementById('managerApp').style.display = 'block';
     document.getElementById('sessionManagerName').textContent = currentManagerName;
     logActivity('login', currentManagerName, 'Area manager logged in' + (viaOldSystem ? ' (old system)' : ''));
@@ -930,6 +1028,7 @@ async function loadBranchReport(){
 
 // ===== AREA MANAGER APP =====
 let currentManagerName = null;
+let currentManagerUsername = null;
 
 async function initManagerApp(){
   document.getElementById('cDate').value = todayStr();
@@ -943,6 +1042,8 @@ async function initManagerApp(){
   document.getElementById('submitCollectionBtn').addEventListener('click', submitCollection);
   document.getElementById('mgrBranchFilter').addEventListener('change', loadManagerReport);
   document.getElementById('mgrDateFilter').addEventListener('change', loadManagerReport);
+
+  initSyncTasks();
 
   loadTillReference();
   updatePreview();
@@ -1103,6 +1204,135 @@ async function loadManagerReport(){
   renderCollectionRows(rows, 'mgrReportBody', 'mgrReportEmpty', false, true);
 }
 
+// ===== SHIFT SYNC TASKS (twice daily: 12 AM–12 PM and 12 PM–12 AM) =====
+const SYNC_TYPES = [
+  { key: 'data', label: 'Sync Data' },
+  { key: 'number', label: 'Sync Number' },
+  { key: 'users', label: 'Sync Users' }
+];
+let currentSyncType = null;
+let currentSyncPhotoFile = null;
+
+function getSyncShiftInfo(now = new Date()){
+  const isAM = now.getHours() < 12; // 12 AM–12 PM vs 12 PM–12 AM
+  return {
+    key: isAM ? 'am' : 'pm',
+    label: isAM ? '12 AM – 12 PM' : '12 PM – 12 AM'
+  };
+}
+
+function syncDocId(managerUsername, date, shiftKey, syncType){
+  return `${managerUsername}_${date}_${shiftKey}_${syncType}`;
+}
+
+function initSyncTasks(){
+  const shift = getSyncShiftInfo();
+  document.getElementById('syncShiftLabel').textContent = shift.label;
+  document.getElementById('syncDateLabel').textContent = todayStr();
+
+  document.querySelectorAll('[data-syncbtn]').forEach(btn => {
+    btn.addEventListener('click', () => openSyncModal(btn.dataset.syncbtn));
+  });
+
+  document.getElementById('syncPhotoInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    const submitBtn = document.getElementById('submitSyncBtn');
+    if(!file){ currentSyncPhotoFile = null; submitBtn.disabled = true; document.getElementById('syncPhotoPreviewWrap').style.display = 'none'; return; }
+    currentSyncPhotoFile = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('syncPhotoPreview').src = ev.target.result;
+      document.getElementById('syncPhotoPreviewWrap').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    submitBtn.disabled = false;
+  });
+
+  document.getElementById('cancelSyncBtn').addEventListener('click', closeSyncModal);
+  document.getElementById('submitSyncBtn').addEventListener('click', submitSyncTask);
+
+  loadSyncStatuses();
+}
+
+function openSyncModal(syncType){
+  currentSyncType = syncType;
+  currentSyncPhotoFile = null;
+  const typeInfo = SYNC_TYPES.find(t => t.key === syncType);
+  document.getElementById('syncModalTitle').textContent = typeInfo ? typeInfo.label : 'Sync';
+  document.getElementById('syncPhotoInput').value = '';
+  document.getElementById('syncPhotoPreviewWrap').style.display = 'none';
+  document.getElementById('submitSyncBtn').disabled = true;
+  document.getElementById('syncTaskModal').classList.add('show');
+}
+
+function closeSyncModal(){
+  document.getElementById('syncTaskModal').classList.remove('show');
+  currentSyncType = null;
+  currentSyncPhotoFile = null;
+}
+
+async function submitSyncTask(){
+  if(!currentSyncType || !currentSyncPhotoFile) return;
+  const submitBtn = document.getElementById('submitSyncBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Uploading...';
+  try{
+    const date = todayStr();
+    const shift = getSyncShiftInfo();
+    const docId = syncDocId(currentManagerUsername, date, shift.key, currentSyncType);
+
+    const storageRef = storage.ref(`syncPhotos/${docId}_${Date.now()}.jpg`);
+    await storageRef.put(currentSyncPhotoFile);
+    const photoURL = await storageRef.getDownloadURL();
+
+    await db.collection(CONFIG.SYNC_COLLECTION).doc(docId).set({
+      managerUsername: currentManagerUsername,
+      managerName: currentManagerName,
+      syncType: currentSyncType,
+      date, shiftKey: shift.key, shiftLabel: shift.label,
+      photoURL,
+      timestamp: serverTimestamp()
+    });
+
+    await logActivity('sync', currentManagerName, `${SYNC_TYPES.find(t=>t.key===currentSyncType).label} — ${shift.label} — ${date}`);
+
+    showToast('Sync submitted');
+    closeSyncModal();
+    loadSyncStatuses();
+  }catch(err){
+    showToast('Error: ' + err.message, true);
+  }finally{
+    submitBtn.textContent = 'Submit';
+  }
+}
+
+async function loadSyncStatuses(){
+  const date = todayStr();
+  const shift = getSyncShiftInfo();
+  for(const t of SYNC_TYPES){
+    const docId = syncDocId(currentManagerUsername, date, shift.key, t.key);
+    const metaEl = document.getElementById(`syncStatus-${t.key}`);
+    const btnEl = document.querySelector(`[data-syncbtn="${t.key}"]`);
+    try{
+      const snap = await db.collection(CONFIG.SYNC_COLLECTION).doc(docId).get();
+      if(snap.exists){
+        const d = snap.data();
+        metaEl.textContent = `Done at ${fmtClockTime(d.timestamp)}`;
+        btnEl.textContent = 'Re-sync';
+        btnEl.classList.remove('secondary');
+        btnEl.classList.add('primary');
+      } else {
+        metaEl.textContent = 'Not done yet for this shift';
+        btnEl.textContent = 'Do Sync';
+        btnEl.classList.remove('primary');
+        btnEl.classList.add('secondary');
+      }
+    }catch(err){
+      metaEl.textContent = 'Status unavailable';
+    }
+  }
+}
+
 // ===== ADMIN APP =====
 let cachedTillRows = [], cachedCollRows = [];
 
@@ -1111,6 +1341,7 @@ async function initAdminApp(){
   populateBranchSelect(document.getElementById('adminTillBranchFilter'), false);
   populateBranchSelect(document.getElementById('adminCollBranchFilter'), false);
   populateBranchSelect(document.getElementById('ecBranch'), false);
+  populateManagerFilterSelect();
 
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -1121,6 +1352,7 @@ async function initAdminApp(){
       if(btn.dataset.tab === 'tabBranches') loadBranchesList();
       if(btn.dataset.tab === 'tabManagers') loadManagersList();
       if(btn.dataset.tab === 'tabActivity') loadActivityLog();
+      if(btn.dataset.tab === 'tabSyncs') loadAdminSyncReport();
     });
   });
 
@@ -1144,6 +1376,19 @@ async function initAdminApp(){
     loadAdminCollReport();
   });
   document.getElementById('markDoneBtn').addEventListener('click', markFilteredCollectionsDone);
+
+  document.getElementById('adminSyncManagerFilter').addEventListener('change', loadAdminSyncReport);
+  document.getElementById('adminSyncTypeFilter').addEventListener('change', loadAdminSyncReport);
+  document.getElementById('adminSyncDateFrom').addEventListener('change', loadAdminSyncReport);
+  document.getElementById('adminSyncDateTo').addEventListener('change', loadAdminSyncReport);
+  document.getElementById('clearSyncFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('adminSyncManagerFilter').value = '';
+    document.getElementById('adminSyncTypeFilter').value = '';
+    document.getElementById('adminSyncDateFrom').value = '';
+    document.getElementById('adminSyncDateTo').value = '';
+    loadAdminSyncReport();
+  });
+  document.getElementById('closeSyncPhotoModalBtn').addEventListener('click', ()=> document.getElementById('viewSyncPhotoModal').classList.remove('show'));
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
@@ -1271,6 +1516,57 @@ async function markFilteredCollectionsDone(){
     btn.disabled = false;
     btn.textContent = originalLabel;
   }
+}
+
+async function populateManagerFilterSelect(){
+  const sel = document.getElementById('adminSyncManagerFilter');
+  const current = sel.value;
+  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','manager').get();
+  sel.innerHTML = '<option value="">All managers</option>';
+  snap.forEach(d => {
+    const data = d.data();
+    const opt = document.createElement('option');
+    opt.value = data.username || '';
+    opt.textContent = data.name || data.username || '';
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+const SYNC_TYPE_LABELS = { data: 'Sync Data', number: 'Sync Number', users: 'Sync Users' };
+
+async function loadAdminSyncReport(){
+  const managerVal = document.getElementById('adminSyncManagerFilter').value;
+  const typeVal = document.getElementById('adminSyncTypeFilter').value;
+  const fromVal = document.getElementById('adminSyncDateFrom').value;
+  const toVal = document.getElementById('adminSyncDateTo').value;
+  const snap = await db.collection(CONFIG.SYNC_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(managerVal) rows = rows.filter(r => r.managerUsername === managerVal);
+  if(typeVal) rows = rows.filter(r => r.syncType === typeVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || '') || (a.shiftKey||'').localeCompare(b.shiftKey||''));
+
+  const tbody = document.getElementById('adminSyncBody');
+  const empty = document.getElementById('adminSyncEmpty');
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.managerName || r.managerUsername || ''}</td>
+      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+      <td>${r.photoURL ? `<img src="${r.photoURL}" class="sync-thumb" data-viewphoto="${r.photoURL}">` : '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-viewphoto]').forEach(img => img.addEventListener('click', ()=>{
+    document.getElementById('viewSyncPhotoImg').src = img.dataset.viewphoto;
+    document.getElementById('viewSyncPhotoModal').classList.add('show');
+  }));
 }
 
 let editingCollId = null;
