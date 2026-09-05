@@ -588,6 +588,12 @@
     <div id="syncPhotoPreviewWrap" style="display:none;margin-bottom:14px;">
       <img id="syncPhotoPreview" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
     </div>
+    <div id="syncUploadProgressWrap" style="display:none;margin-bottom:14px;">
+      <div style="background:var(--beige-2);border-radius:20px;height:10px;overflow:hidden;">
+        <div id="syncUploadProgressBar" style="background:var(--green);height:100%;width:0%;transition:width .2s ease;"></div>
+      </div>
+      <div id="syncUploadProgressLabel" style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;text-align:center;">Uploading... 0%</div>
+    </div>
     <div style="display:flex;gap:10px;margin-top:6px;">
       <button type="button" class="primary" id="submitSyncBtn" disabled>Submit</button>
       <button type="button" class="secondary" id="cancelSyncBtn">Cancel</button>
@@ -1265,6 +1271,37 @@ function syncDocId(managerUsername, date, shiftKey, syncType){
   return `${managerUsername}_${date}_${shiftKey}_${syncType}`;
 }
 
+// Resizes an image file down to maxDim on its longest side and re-encodes it as a JPEG
+// at the given quality. This is what makes sync-photo uploads fast on slow branch internet —
+// a 5-8 MB camera photo typically comes out under 300 KB with no visible quality loss.
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if(width > height && width > maxDim){
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if(height >= width && height > maxDim){
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(objectUrl);
+      canvas.toBlob((blob) => {
+        if(blob) resolve(blob); else reject(new Error('Compression produced no output'));
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Could not read the selected photo')); };
+    img.src = objectUrl;
+  });
+}
+
 function isMobileDevice(){
   const ua = navigator.userAgent || navigator.vendor || window.opera || '';
   const uaMobile = /android|iphone|ipad|ipod|iemobile|blackberry|opera mini|mobile/i.test(ua);
@@ -1290,17 +1327,29 @@ function initSyncTasks(){
     document.getElementById('syncRowsWrap').parentElement.insertBefore(notice, document.getElementById('syncRowsWrap'));
   }
 
-  document.getElementById('syncPhotoInput').addEventListener('change', (e) => {
+  document.getElementById('syncPhotoInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     const submitBtn = document.getElementById('submitSyncBtn');
-    if(!file){ currentSyncPhotoFile = null; submitBtn.disabled = true; document.getElementById('syncPhotoPreviewWrap').style.display = 'none'; return; }
-    currentSyncPhotoFile = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      document.getElementById('syncPhotoPreview').src = ev.target.result;
-      document.getElementById('syncPhotoPreviewWrap').style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+    const previewWrap = document.getElementById('syncPhotoPreviewWrap');
+    if(!file){ currentSyncPhotoFile = null; submitBtn.disabled = true; previewWrap.style.display = 'none'; return; }
+
+    submitBtn.disabled = true;
+    previewWrap.style.display = 'none';
+    submitBtn.textContent = 'Preparing photo...';
+    try{
+      // Resize + compress on-device so uploads are fast even on slow branch internet
+      const compressed = await compressImage(file, 1280, 0.7);
+      currentSyncPhotoFile = compressed;
+      document.getElementById('syncPhotoPreview').src = URL.createObjectURL(compressed);
+    }catch(e){
+      // If compression fails for any reason, fall back to the original photo so the flow still works
+      currentSyncPhotoFile = file;
+      const reader = new FileReader();
+      reader.onload = (ev) => { document.getElementById('syncPhotoPreview').src = ev.target.result; };
+      reader.readAsDataURL(file);
+    }
+    previewWrap.style.display = 'block';
+    submitBtn.textContent = 'Submit';
     submitBtn.disabled = false;
   });
 
@@ -1321,6 +1370,7 @@ function openSyncModal(syncType){
   document.getElementById('syncModalTitle').textContent = typeInfo ? typeInfo.label : 'Sync';
   document.getElementById('syncPhotoInput').value = '';
   document.getElementById('syncPhotoPreviewWrap').style.display = 'none';
+  document.getElementById('syncUploadProgressWrap').style.display = 'none';
   document.getElementById('submitSyncBtn').disabled = true;
   document.getElementById('syncTaskModal').classList.add('show');
 }
@@ -1334,16 +1384,32 @@ function closeSyncModal(){
 async function submitSyncTask(){
   if(!currentSyncType || !currentSyncPhotoFile) return;
   const submitBtn = document.getElementById('submitSyncBtn');
+  const progressWrap = document.getElementById('syncUploadProgressWrap');
+  const progressBar = document.getElementById('syncUploadProgressBar');
+  const progressLabel = document.getElementById('syncUploadProgressLabel');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Uploading...';
+  progressWrap.style.display = 'block';
+  progressBar.style.width = '0%';
+  progressLabel.textContent = 'Uploading... 0%';
   try{
     const date = todayStr();
     const shift = getSyncShiftInfo();
     const docId = syncDocId(currentBranchSlug, date, shift.key, currentSyncType);
 
     const storageRef = storage.ref(`syncPhotos/${docId}_${Date.now()}.jpg`);
-    await storageRef.put(currentSyncPhotoFile);
-    const photoURL = await storageRef.getDownloadURL();
+    const uploadTask = storageRef.put(currentSyncPhotoFile, { contentType: 'image/jpeg' });
+
+    const photoURL = await new Promise((resolve, reject) => {
+      uploadTask.on('state_changed', (snap) => {
+        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
+        progressBar.style.width = pct + '%';
+        progressLabel.textContent = `Uploading... ${pct}%`;
+      }, (err) => reject(err), async () => {
+        try{ resolve(await uploadTask.snapshot.ref.getDownloadURL()); }
+        catch(e){ reject(e); }
+      });
+    });
 
     await db.collection(CONFIG.SYNC_COLLECTION).doc(docId).set({
       branchSlug: currentBranchSlug,
@@ -1363,6 +1429,7 @@ async function submitSyncTask(){
     showToast('Error: ' + err.message, true);
   }finally{
     submitBtn.textContent = 'Submit';
+    progressWrap.style.display = 'none';
   }
 }
 
