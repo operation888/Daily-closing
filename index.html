@@ -426,12 +426,20 @@
   <div class="modal-box">
     <h3>Edit Till Record</h3>
     <div class="row">
-      <div><label>Opened By</label><input type="text" id="etOpenedBy"></div>
+      <div><label>Status</label>
+        <select id="etStatus">
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
       <div><label>Opening Cash</label><input type="number" step="any" id="etOpeningCash"></div>
     </div>
     <div class="row">
-      <div><label>Closed By</label><input type="text" id="etClosedBy"></div>
+      <div><label>Opened By</label><input type="text" id="etOpenedBy"></div>
       <div><label>Closing Cash</label><input type="number" step="any" id="etClosingCash"></div>
+    </div>
+    <div class="row single">
+      <div><label>Closed By</label><input type="text" id="etClosedBy"></div>
     </div>
     <div class="row single">
       <div><label>Notes</label><input type="text" id="etNotes"></div>
@@ -1036,19 +1044,24 @@ function renderCollectionRows(rows, tbodyId, emptyId, withActions, allowNoteEdit
   });
 
   // Auto-calculated totals for whatever is currently filtered (branch/date)
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   const totals = rows.reduce((acc, r) => {
+    acc.cashCollected += Number(r.cashCollectedTotal) || 0;
     acc.moreCash  += Number(r.moreCash)  || 0;
     acc.moreATM   += Number(r.moreATM)   || 0;
     acc.shortCash += Number(r.shortCash) || 0;
     acc.shortATM  += Number(r.shortATM)  || 0;
     acc.total     += Number(r.total)     || 0;
     return acc;
-  }, { moreCash: 0, moreATM: 0, shortCash: 0, shortATM: 0, total: 0 });
+  }, { cashCollected: 0, moreCash: 0, moreATM: 0, shortCash: 0, shortATM: 0, total: 0 });
+  Object.keys(totals).forEach(k => totals[k] = round2(totals[k]));
 
   const totalTr = document.createElement('tr');
   totalTr.className = 'totals-row';
   totalTr.innerHTML = `
-    <td colspan="6" style="text-align:right;">TOTAL — ${rows.length} record${rows.length === 1 ? '' : 's'}</td>
+    <td colspan="3" style="text-align:right;">TOTAL — ${rows.length} record${rows.length === 1 ? '' : 's'}</td>
+    <td>${totals.cashCollected}</td>
+    <td colspan="2"></td>
     <td>${totals.moreCash}</td><td>${totals.moreATM}</td><td>${totals.shortCash}</td><td>${totals.shortATM}</td>
     <td class="${totals.total < 0 ? 'neg' : 'pos'}">${totals.total}</td>
     <td></td>${withActions ? '<td></td>' : ''}
@@ -1155,6 +1168,7 @@ function openTillEditModal(id, rows){
   const r = (rows || cachedTillRows).find(x => x.id === id);
   if(!r) return;
   editingTillId = id;
+  document.getElementById('etStatus').value = r.status || 'open';
   document.getElementById('etOpenedBy').value = r.openedBy || '';
   document.getElementById('etOpeningCash').value = r.openingCash ?? 0;
   document.getElementById('etClosedBy').value = r.closedBy || '';
@@ -1166,13 +1180,27 @@ function openTillEditModal(id, rows){
 async function saveTillEdit(){
   if(!editingTillId) return;
   try{
-    await db.collection(CONFIG.TILLS_COLLECTION).doc(editingTillId).update({
+    const existing = cachedTillRows.find(x => x.id === editingTillId) || {};
+    const status = document.getElementById('etStatus').value;
+    const closedBy = document.getElementById('etClosedBy').value.trim();
+    const updateData = {
+      status,
       openedBy: document.getElementById('etOpenedBy').value.trim(),
       openingCash: num(document.getElementById('etOpeningCash').value),
-      closedBy: document.getElementById('etClosedBy').value.trim(),
+      closedBy,
       closingCash: num(document.getElementById('etClosingCash').value),
       notes: document.getElementById('etNotes').value.trim()
-    });
+    };
+    // If admin is marking this record as Closed and there's no close time yet
+    // (e.g. it was stuck on "Open" with wrong/missing numbers), stamp it now.
+    if(status === 'closed' && !existing.closeTime){
+      updateData.closeTime = serverTimestamp();
+    }
+    // If admin reopens a record, clear the close time so it shows correctly.
+    if(status === 'open'){
+      updateData.closeTime = firebase.firestore.FieldValue.delete();
+    }
+    await db.collection(CONFIG.TILLS_COLLECTION).doc(editingTillId).update(updateData);
     showToast('Till record updated');
     document.getElementById('editTillModal').classList.remove('show');
     loadAdminTillReport();
