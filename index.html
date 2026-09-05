@@ -326,7 +326,8 @@
       <h3>All Till Closing Records</h3>
       <div class="admin-filters">
         <select id="adminTillBranchFilter"><option value="">All branches</option></select>
-        <input type="date" id="adminTillDateFilter">
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminTillDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminTillDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearTillFiltersBtn">Clear Filters</button>
       </div>
       <div class="table-wrap">
@@ -347,8 +348,10 @@
       <h3>All Cash Collections</h3>
       <div class="admin-filters">
         <select id="adminCollBranchFilter"><option value="">All branches</option></select>
-        <input type="date" id="adminCollDateFilter">
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminCollDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminCollDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearCollFiltersBtn">Clear Filters</button>
+        <button type="button" class="primary" id="markDoneBtn">Mark Pending as Done</button>
       </div>
       <div class="table-wrap">
         <table id="adminCollTable">
@@ -1122,20 +1125,25 @@ async function initAdminApp(){
   });
 
   document.getElementById('adminTillBranchFilter').addEventListener('change', loadAdminTillReport);
-  document.getElementById('adminTillDateFilter').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDateFrom').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDateTo').addEventListener('change', loadAdminTillReport);
   document.getElementById('clearTillFiltersBtn').addEventListener('click', ()=>{
     document.getElementById('adminTillBranchFilter').value = '';
-    document.getElementById('adminTillDateFilter').value = '';
+    document.getElementById('adminTillDateFrom').value = '';
+    document.getElementById('adminTillDateTo').value = '';
     loadAdminTillReport();
   });
 
   document.getElementById('adminCollBranchFilter').addEventListener('change', loadAdminCollReport);
-  document.getElementById('adminCollDateFilter').addEventListener('change', loadAdminCollReport);
+  document.getElementById('adminCollDateFrom').addEventListener('change', loadAdminCollReport);
+  document.getElementById('adminCollDateTo').addEventListener('change', loadAdminCollReport);
   document.getElementById('clearCollFiltersBtn').addEventListener('click', ()=>{
     document.getElementById('adminCollBranchFilter').value = '';
-    document.getElementById('adminCollDateFilter').value = '';
+    document.getElementById('adminCollDateFrom').value = '';
+    document.getElementById('adminCollDateTo').value = '';
     loadAdminCollReport();
   });
+  document.getElementById('markDoneBtn').addEventListener('click', markFilteredCollectionsDone);
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
@@ -1152,12 +1160,14 @@ async function initAdminApp(){
 
 async function loadAdminTillReport(){
   const branchVal = document.getElementById('adminTillBranchFilter').value;
-  const dateVal = document.getElementById('adminTillDateFilter').value;
+  const fromVal = document.getElementById('adminTillDateFrom').value;
+  const toVal = document.getElementById('adminTillDateTo').value;
   const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(dateVal) rows = rows.filter(r => r.businessDate === dateVal);
+  if(fromVal) rows = rows.filter(r => (r.businessDate || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.businessDate || '') <= toVal);
   rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
   cachedTillRows = rows;
   renderTillRows(rows, 'adminTillBody', 'adminTillEmpty', true);
@@ -1209,15 +1219,58 @@ async function saveTillEdit(){
 
 async function loadAdminCollReport(){
   const branchVal = document.getElementById('adminCollBranchFilter').value;
-  const dateVal = document.getElementById('adminCollDateFilter').value;
+  const fromVal = document.getElementById('adminCollDateFrom').value;
+  const toVal = document.getElementById('adminCollDateTo').value;
   const snap = await db.collection(CONFIG.COLLECTIONS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(dateVal) rows = rows.filter(r => r.date === dateVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
   rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
   cachedCollRows = rows;
   renderCollectionRows(rows, 'adminCollBody', 'adminCollEmpty', true);
+}
+
+// One-click bulk action: marks every currently-filtered Pending collection
+// (by the selected branch/date range) as Done, in a single click.
+async function markFilteredCollectionsDone(){
+  const branchVal = document.getElementById('adminCollBranchFilter').value;
+  const fromVal = document.getElementById('adminCollDateFrom').value;
+  const toVal = document.getElementById('adminCollDateTo').value;
+  const pendingRows = cachedCollRows.filter(r => (r.submittedFinanceStatus || 'Pending') === 'Pending');
+
+  if(pendingRows.length === 0){
+    showToast('No pending records in the current filter to mark as Done.', true);
+    return;
+  }
+
+  let scopeLabel;
+  if(fromVal && toVal) scopeLabel = `${fromVal} to ${toVal}`;
+  else if(fromVal) scopeLabel = `from ${fromVal} onward`;
+  else if(toVal) scopeLabel = `up to ${toVal}`;
+  else scopeLabel = 'all currently filtered records';
+  const branchLabel = branchVal ? ` for ${branchVal}` : '';
+  if(!confirm(`Mark ${pendingRows.length} pending record(s) for ${scopeLabel}${branchLabel} as Done?`)) return;
+
+  const btn = document.getElementById('markDoneBtn');
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Updating...';
+  try{
+    const batch = db.batch();
+    pendingRows.forEach(r => {
+      batch.update(db.collection(CONFIG.COLLECTIONS_COLLECTION).doc(r.id), { submittedFinanceStatus: 'Done' });
+    });
+    await batch.commit();
+    showToast(`${pendingRows.length} record(s) marked as Done.`);
+    loadAdminCollReport();
+  }catch(err){
+    showToast('Error: ' + err.message, true);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
 }
 
 let editingCollId = null;
