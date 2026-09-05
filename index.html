@@ -219,7 +219,7 @@
 
     <div class="card">
       <h3>Shift Sync Tasks</h3>
-      <p class="hint">Complete all 3 syncs once per shift window (12 AM–12 PM and 12 PM–12 AM), each with a live photo attached.</p>
+      <p class="hint">Complete all 3 syncs once per shift window (12 AM–12 PM and 12 PM–12 AM) — just tap to mark done.</p>
       <div class="sync-shift-banner">Current shift: <strong id="syncShiftLabel">—</strong> · <span id="syncDateLabel">—</span></div>
       <div id="syncRowsWrap">
         <div class="sync-row" data-synctype="data">
@@ -227,21 +227,21 @@
             <div class="sync-label">1. Sync Data</div>
             <div class="sync-meta" id="syncStatus-data">Not done yet for this shift</div>
           </div>
-          <button type="button" class="secondary" data-syncbtn="data">Do Sync</button>
+          <button type="button" class="secondary" data-synctick="data">☐ Mark Done</button>
         </div>
         <div class="sync-row" data-synctype="number">
           <div>
             <div class="sync-label">2. Sync Number</div>
             <div class="sync-meta" id="syncStatus-number">Not done yet for this shift</div>
           </div>
-          <button type="button" class="secondary" data-syncbtn="number">Do Sync</button>
+          <button type="button" class="secondary" data-synctick="number">☐ Mark Done</button>
         </div>
         <div class="sync-row" data-synctype="users">
           <div>
             <div class="sync-label">3. Sync Users</div>
             <div class="sync-meta" id="syncStatus-users">Not done yet for this shift</div>
           </div>
-          <button type="button" class="secondary" data-syncbtn="users">Do Sync</button>
+          <button type="button" class="secondary" data-synctick="users">☐ Mark Done</button>
         </div>
       </div>
     </div>
@@ -408,7 +408,7 @@
 
     <div class="tab-panel card" id="tabSyncs">
       <h3>Branch Shift Syncs</h3>
-      <p class="hint">Data / Number / Users sync submitted by branches, twice daily (12 AM–12 PM, 12 PM–12 AM), each with a live photo.</p>
+      <p class="hint">Data / Number / Users sync submitted by branches, twice daily (12 AM–12 PM, 12 PM–12 AM).</p>
       <div class="admin-filters">
         <select id="adminSyncBranchFilter"><option value="">All branches</option></select>
         <select id="adminSyncTypeFilter">
@@ -420,13 +420,11 @@
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminSyncDateFrom" style="width:auto;display:inline-block;"></label>
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminSyncDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearSyncFiltersBtn">Clear Filters</button>
-        <button type="button" class="secondary" id="cleanupOldPhotosBtn" style="color:var(--alert);">🧹 Cleanup old photos</button>
       </div>
-      <div class="hint" id="cleanupHint" style="margin-top:-4px;margin-bottom:10px;">Sync photos older than 30 days are deleted automatically every time this dashboard is opened. Use the button to run it manually right now.</div>
       <div class="table-wrap">
         <table id="adminSyncTable">
           <thead><tr>
-            <th>Date</th><th>Shift</th><th>Branch</th><th>Sync Type</th><th>Time</th><th>Photo</th>
+            <th>Date</th><th>Shift</th><th>Branch</th><th>Sync Type</th><th>Time</th>
           </tr></thead>
           <tbody id="adminSyncBody"></tbody>
         </table>
@@ -576,41 +574,7 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="syncTaskModal">
-  <div class="modal-box" style="max-width:420px;">
-    <h3 id="syncModalTitle">Sync Data</h3>
-    <p class="hint" id="syncModalHint">Take a live photo as proof, then submit.</p>
-    <div class="row single">
-      <div>
-        <label>Live Photo *</label>
-        <input type="file" accept="image/*" capture="environment" id="syncPhotoInput">
-      </div>
-    </div>
-    <div id="syncPhotoPreviewWrap" style="display:none;margin-bottom:14px;">
-      <img id="syncPhotoPreview" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;border:1px solid var(--line);">
-    </div>
-    <div id="syncUploadProgressWrap" style="display:none;margin-bottom:14px;">
-      <div style="background:var(--beige-2);border-radius:20px;height:10px;overflow:hidden;">
-        <div id="syncUploadProgressBar" style="background:var(--green);height:100%;width:0%;transition:width .2s ease;"></div>
-      </div>
-      <div id="syncUploadProgressLabel" style="font-size:11.5px;color:var(--ink-soft);margin-top:4px;text-align:center;">Uploading... 0%</div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:6px;">
-      <button type="button" class="primary" id="submitSyncBtn" disabled>Submit</button>
-      <button type="button" class="secondary" id="cancelSyncBtn">Cancel</button>
-    </div>
-  </div>
-</div>
 
-<div class="modal-overlay" id="viewSyncPhotoModal">
-  <div class="modal-box" style="max-width:480px;">
-    <h3>Sync Photo</h3>
-    <img id="viewSyncPhotoImg" style="width:100%;border-radius:10px;border:1px solid var(--line);margin-bottom:16px;">
-    <div style="display:flex;justify-content:flex-end;">
-      <button type="button" class="secondary" id="closeSyncPhotoModalBtn">Close</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1315,122 +1279,43 @@ function initSyncTasks(){
   document.getElementById('syncShiftLabel').textContent = shift.label;
   document.getElementById('syncDateLabel').textContent = todayStr();
 
-  document.querySelectorAll('[data-syncbtn]').forEach(btn => {
-    btn.addEventListener('click', () => openSyncModal(btn.dataset.syncbtn));
+  document.querySelectorAll('[data-synctick]').forEach(btn => {
+    btn.addEventListener('click', () => toggleSyncTick(btn.dataset.synctick));
   });
-
-  if(!isMobileDevice()){
-    const banner = document.getElementById('syncShiftLabel').closest('.card') || document.getElementById('syncRowsWrap');
-    const notice = document.createElement('div');
-    notice.className = 'sync-shift-banner';
-    notice.style.background = '#fdecea';
-    notice.innerHTML = '<strong>Mobile only:</strong> Sync tasks sirf mobile phone se hi kiye ja sakte hain (live camera photo required). Laptop/desktop se sync submit nahi ho sakta.';
-    document.getElementById('syncRowsWrap').parentElement.insertBefore(notice, document.getElementById('syncRowsWrap'));
-  }
-
-  document.getElementById('syncPhotoInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    const submitBtn = document.getElementById('submitSyncBtn');
-    const previewWrap = document.getElementById('syncPhotoPreviewWrap');
-    if(!file){ currentSyncPhotoFile = null; submitBtn.disabled = true; previewWrap.style.display = 'none'; return; }
-
-    submitBtn.disabled = true;
-    previewWrap.style.display = 'none';
-    submitBtn.textContent = 'Preparing photo...';
-    try{
-      // Resize + compress on-device so uploads are fast even on slow branch internet
-      const compressed = await compressImage(file, 1280, 0.7);
-      currentSyncPhotoFile = compressed;
-      document.getElementById('syncPhotoPreview').src = URL.createObjectURL(compressed);
-    }catch(e){
-      // If compression fails for any reason, fall back to the original photo so the flow still works
-      currentSyncPhotoFile = file;
-      const reader = new FileReader();
-      reader.onload = (ev) => { document.getElementById('syncPhotoPreview').src = ev.target.result; };
-      reader.readAsDataURL(file);
-    }
-    previewWrap.style.display = 'block';
-    submitBtn.textContent = 'Submit';
-    submitBtn.disabled = false;
-  });
-
-  document.getElementById('cancelSyncBtn').addEventListener('click', closeSyncModal);
-  document.getElementById('submitSyncBtn').addEventListener('click', submitSyncTask);
 
   loadSyncStatuses();
 }
 
-function openSyncModal(syncType){
-  if(!isMobileDevice()){
-    showToast('Sync sirf mobile se hi kiya ja sakta hai. Kripya apne mobile phone par yeh dashboard khol kar live photo lein.');
-    return;
-  }
-  currentSyncType = syncType;
-  currentSyncPhotoFile = null;
+async function toggleSyncTick(syncType){
+  const date = todayStr();
+  const shift = getSyncShiftInfo();
+  const docId = syncDocId(currentBranchSlug, date, shift.key, syncType);
+  const btnEl = document.querySelector(`[data-synctick="${syncType}"]`);
   const typeInfo = SYNC_TYPES.find(t => t.key === syncType);
-  document.getElementById('syncModalTitle').textContent = typeInfo ? typeInfo.label : 'Sync';
-  document.getElementById('syncPhotoInput').value = '';
-  document.getElementById('syncPhotoPreviewWrap').style.display = 'none';
-  document.getElementById('syncUploadProgressWrap').style.display = 'none';
-  document.getElementById('submitSyncBtn').disabled = true;
-  document.getElementById('syncTaskModal').classList.add('show');
-}
-
-function closeSyncModal(){
-  document.getElementById('syncTaskModal').classList.remove('show');
-  currentSyncType = null;
-  currentSyncPhotoFile = null;
-}
-
-async function submitSyncTask(){
-  if(!currentSyncType || !currentSyncPhotoFile) return;
-  const submitBtn = document.getElementById('submitSyncBtn');
-  const progressWrap = document.getElementById('syncUploadProgressWrap');
-  const progressBar = document.getElementById('syncUploadProgressBar');
-  const progressLabel = document.getElementById('syncUploadProgressLabel');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Uploading...';
-  progressWrap.style.display = 'block';
-  progressBar.style.width = '0%';
-  progressLabel.textContent = 'Uploading... 0%';
+  btnEl.disabled = true;
   try{
-    const date = todayStr();
-    const shift = getSyncShiftInfo();
-    const docId = syncDocId(currentBranchSlug, date, shift.key, currentSyncType);
-
-    const storageRef = storage.ref(`syncPhotos/${docId}_${Date.now()}.jpg`);
-    const uploadTask = storageRef.put(currentSyncPhotoFile, { contentType: 'image/jpeg' });
-
-    const photoURL = await new Promise((resolve, reject) => {
-      uploadTask.on('state_changed', (snap) => {
-        const pct = snap.totalBytes ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0;
-        progressBar.style.width = pct + '%';
-        progressLabel.textContent = `Uploading... ${pct}%`;
-      }, (err) => reject(err), async () => {
-        try{ resolve(await uploadTask.snapshot.ref.getDownloadURL()); }
-        catch(e){ reject(e); }
+    const ref = db.collection(CONFIG.SYNC_COLLECTION).doc(docId);
+    const snap = await ref.get();
+    if(snap.exists){
+      await ref.delete();
+      await logActivity('sync', currentBranch, `${typeInfo.label} — ${shift.label} — ${date} — unmarked`);
+      showToast('Marked as not done');
+    } else {
+      await ref.set({
+        branchSlug: currentBranchSlug,
+        branchName: currentBranch,
+        syncType,
+        date, shiftKey: shift.key, shiftLabel: shift.label,
+        timestamp: serverTimestamp()
       });
-    });
-
-    await db.collection(CONFIG.SYNC_COLLECTION).doc(docId).set({
-      branchSlug: currentBranchSlug,
-      branchName: currentBranch,
-      syncType: currentSyncType,
-      date, shiftKey: shift.key, shiftLabel: shift.label,
-      photoURL,
-      timestamp: serverTimestamp()
-    });
-
-    await logActivity('sync', currentBranch, `${SYNC_TYPES.find(t=>t.key===currentSyncType).label} — ${shift.label} — ${date}`);
-
-    showToast('Sync submitted');
-    closeSyncModal();
+      await logActivity('sync', currentBranch, `${typeInfo.label} — ${shift.label} — ${date}`);
+      showToast('Marked as done');
+    }
     loadSyncStatuses();
   }catch(err){
     showToast('Error: ' + err.message, true);
   }finally{
-    submitBtn.textContent = 'Submit';
-    progressWrap.style.display = 'none';
+    btnEl.disabled = false;
   }
 }
 
@@ -1440,18 +1325,18 @@ async function loadSyncStatuses(){
   for(const t of SYNC_TYPES){
     const docId = syncDocId(currentBranchSlug, date, shift.key, t.key);
     const metaEl = document.getElementById(`syncStatus-${t.key}`);
-    const btnEl = document.querySelector(`[data-syncbtn="${t.key}"]`);
+    const btnEl = document.querySelector(`[data-synctick="${t.key}"]`);
     try{
       const snap = await db.collection(CONFIG.SYNC_COLLECTION).doc(docId).get();
       if(snap.exists){
         const d = snap.data();
         metaEl.textContent = `Done at ${fmtClockTime(d.timestamp)}`;
-        btnEl.textContent = 'Re-sync';
+        btnEl.textContent = '✅ Done';
         btnEl.classList.remove('secondary');
         btnEl.classList.add('primary');
       } else {
         metaEl.textContent = 'Not done yet for this shift';
-        btnEl.textContent = 'Do Sync';
+        btnEl.textContent = '☐ Mark Done';
         btnEl.classList.remove('primary');
         btnEl.classList.add('secondary');
       }
@@ -1470,9 +1355,6 @@ async function initAdminApp(){
   populateBranchSelect(document.getElementById('adminCollBranchFilter'), false);
   populateBranchSelect(document.getElementById('ecBranch'), false);
   populateBranchSelect(document.getElementById('adminSyncBranchFilter'), false);
-
-  // Auto-delete sync photos older than 30 days every time the admin dashboard is opened
-  autoCleanupOldSyncPhotos().catch(()=>{});
 
   document.querySelectorAll('.tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -1517,8 +1399,6 @@ async function initAdminApp(){
     document.getElementById('adminSyncDateTo').value = '';
     loadAdminSyncReport();
   });
-  document.getElementById('closeSyncPhotoModalBtn').addEventListener('click', ()=> document.getElementById('viewSyncPhotoModal').classList.remove('show'));
-  document.getElementById('cleanupOldPhotosBtn').addEventListener('click', cleanupOldSyncPhotos);
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
@@ -1647,57 +1527,7 @@ async function markFilteredCollectionsDone(){
 }
 
 const SYNC_TYPE_LABELS = { data: 'Sync Data', number: 'Sync Number', users: 'Sync Users' };
-const SYNC_PHOTO_RETENTION_DAYS = 30; // sync photos older than this are auto-deleted
-
-async function autoCleanupOldSyncPhotos(){
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - SYNC_PHOTO_RETENTION_DAYS);
-  const cutoffStr = `${cutoff.getFullYear()}-${pad(cutoff.getMonth()+1)}-${pad(cutoff.getDate())}`;
-
-  const snap = await db.collection(CONFIG.SYNC_COLLECTION).get();
-  const oldDocs = [];
-  snap.forEach(d => {
-    const data = d.data();
-    if((data.date || '') < cutoffStr) oldDocs.push({ id: d.id, ...data });
-  });
-
-  if(oldDocs.length === 0) return 0;
-
-  let done = 0;
-  for(const rec of oldDocs){
-    try{
-      if(rec.photoURL){
-        try{ await storage.refFromURL(rec.photoURL).delete(); }
-        catch(e){ /* photo may already be missing — ignore and still remove the record */ }
-      }
-      await db.collection(CONFIG.SYNC_COLLECTION).doc(rec.id).delete();
-      done++;
-    }catch(e){ /* non-fatal — will be retried next time this tab loads */ }
-  }
-  return done;
-}
-
-async function cleanupOldSyncPhotos(){
-  const btn = document.getElementById('cleanupOldPhotosBtn');
-  btn.disabled = true;
-  const origText = btn.textContent;
-  btn.textContent = 'Cleaning up...';
-  try{
-    const done = await autoCleanupOldSyncPhotos();
-    showToast(done > 0 ? `Cleanup done — ${done} old photo${done===1?'':'s'} deleted` : `No sync photos older than ${SYNC_PHOTO_RETENTION_DAYS} days found`);
-    loadAdminSyncReport();
-  }catch(e){
-    showToast('Cleanup failed: ' + e.message);
-  }finally{
-    btn.disabled = false;
-    btn.textContent = origText;
-  }
-}
-
 async function loadAdminSyncReport(){
-  // Automatically purge sync photos older than 30 days every time this tab is opened/refreshed
-  try{ await autoCleanupOldSyncPhotos(); }catch(e){ /* non-fatal */ }
-
   const branchVal = document.getElementById('adminSyncBranchFilter').value;
   const typeVal = document.getElementById('adminSyncTypeFilter').value;
   const fromVal = document.getElementById('adminSyncDateFrom').value;
@@ -1721,14 +1551,9 @@ async function loadAdminSyncReport(){
     tr.innerHTML = `
       <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
       <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
-      <td>${r.photoURL ? `<img src="${r.photoURL}" class="sync-thumb" data-viewphoto="${r.photoURL}">` : '—'}</td>
     `;
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('[data-viewphoto]').forEach(img => img.addEventListener('click', ()=>{
-    document.getElementById('viewSyncPhotoImg').src = img.dataset.viewphoto;
-    document.getElementById('viewSyncPhotoModal').classList.add('show');
-  }));
 }
 
 let editingCollId = null;
