@@ -31,7 +31,7 @@
   .login-btn:hover{background:var(--green-deep);}
   .login-error{display:none;background:var(--alert-bg);color:var(--alert);border:1px solid #D9B9B4;border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:14px;}
   .login-error.show{display:block;}
-  #branchApp,#managerApp,#adminApp{display:none;}
+  #branchApp,#managerApp,#adminApp,#reportApp{display:none;}
   #globalRefreshBtn.spinning{animation:gRefreshSpin .7s linear;}
   @keyframes gRefreshSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
@@ -341,6 +341,68 @@
   </div>
 </div>
 
+<!-- ===================== REPORT VIEWER APP ===================== -->
+<div id="reportApp">
+  <div class="session-bar">
+    <span>Logged in as: <strong id="sessionReportName">—</strong></span>
+    <button type="button" id="reportLogoutBtn">Log Out</button>
+  </div>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">Reports Portal</div>
+      <h1>Reports — View Only</h1>
+      <p>Till opening &amp; closing and cash collections, across all branches. Read-only.</p>
+    </header>
+
+    <div class="tabs">
+      <button type="button" class="tab-btn active" data-reporttab="repTabTill">Till Opening &amp; Closing</button>
+      <button type="button" class="tab-btn" data-reporttab="repTabCollections">Cash Collections</button>
+    </div>
+
+    <div class="tab-panel active card" id="repTabTill">
+      <h3>All Till Closing Records</h3>
+      <div class="admin-filters">
+        <select id="reportTillBranchFilter"><option value="">All branches</option></select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">Date <input type="date" id="reportTillDate" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearReportTillFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="reportTillTable">
+          <thead><tr>
+            <th>Branch</th><th>Date</th><th>Shift</th><th>Status</th>
+            <th>Opened By</th><th>Opening Cash</th>
+            <th>Closed By</th><th>Closing Cash</th>
+            <th>Close Time</th><th>Notes</th>
+          </tr></thead>
+          <tbody id="reportTillBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="reportTillEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="repTabCollections">
+      <h3>All Cash Collections</h3>
+      <div class="admin-filters">
+        <select id="reportCollBranchFilter"><option value="">All branches</option></select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="reportCollDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="reportCollDateTo" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearReportCollFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="reportCollTable">
+          <thead><tr>
+            <th>Date</th><th>Time</th><th>Branch</th><th>Cash Collected</th><th>Who Collected</th>
+            <th>Finance Status</th><th>More Cash</th><th>More ATM</th><th>Short Cash</th>
+            <th>Short ATM</th><th>Total</th><th>Note</th>
+          </tr></thead>
+          <tbody id="reportCollBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="reportCollEmpty" style="display:none;">No records found.</div>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== ADMIN APP ===================== -->
 <div id="adminApp">
   <div class="session-bar">
@@ -360,6 +422,7 @@
       <button type="button" class="tab-btn" data-tab="tabSyncs">Branch Syncs</button>
       <button type="button" class="tab-btn" data-tab="tabBranches">Branch Accounts</button>
       <button type="button" class="tab-btn" data-tab="tabManagers">Area Managers</button>
+      <button type="button" class="tab-btn" data-tab="tabReportUsers">Report Users</button>
       <button type="button" class="tab-btn" data-tab="tabActivity">Activity Log</button>
       <button type="button" class="tab-btn" data-tab="tabSetup">Setup</button>
     </div>
@@ -467,6 +530,24 @@
         </table>
       </div>
       <div class="empty" id="mgrListEmpty" style="display:none;">No area managers yet.</div>
+    </div>
+
+    <div class="tab-panel card" id="tabReportUsers">
+      <h3>Report User Accounts</h3>
+      <p class="hint">Create login accounts for report-only users. They can view Till Opening &amp; Closing and Cash Collections for all branches, but cannot edit, delete, or manage anything.</p>
+      <div class="row three">
+        <div><label>Full Name</label><input type="text" id="newRepName" placeholder="e.g. Sara"></div>
+        <div><label>Username</label><input type="text" id="newRepUser" placeholder="e.g. sara.reports"></div>
+        <div><label>Password</label><input type="text" id="newRepPass" placeholder="e.g. rep2026"></div>
+      </div>
+      <button type="button" class="primary" id="addRepBtn">Add Report User</button>
+      <div class="table-wrap" style="margin-top:18px;">
+        <table id="repListTable">
+          <thead><tr><th>Name</th><th>Username</th><th>Password</th><th></th></tr></thead>
+          <tbody id="repListBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="repListEmpty" style="display:none;">No report users yet.</div>
     </div>
 
     <div class="tab-panel card" id="tabActivity">
@@ -827,12 +908,19 @@ function routeToApp(profile, viaOldSystem){
     document.getElementById('sessionManagerName').textContent = currentManagerName;
     logActivity('login', currentManagerName, 'Area manager logged in' + (viaOldSystem ? ' (old system)' : ''));
     initManagerApp();
+  } else if(profile.role === 'report'){
+    const reportName = profile.name || profile.username;
+    document.getElementById('reportApp').style.display = 'block';
+    document.getElementById('sessionReportName').textContent = reportName;
+    logActivity('login', reportName, 'Report user logged in' + (viaOldSystem ? ' (old system)' : ''));
+    initReportApp();
   }
 }
 
 document.getElementById('branchLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 document.getElementById('managerLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 document.getElementById('adminLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
+document.getElementById('reportLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 
 // ===== Small corner refresh button — reloads only the current screen's data, no logout, no navigation =====
 function refreshCurrentView(){
@@ -849,6 +937,7 @@ function refreshCurrentView(){
     else if(activeTab === 'tabSyncs') tasks.push(loadAdminSyncReport());
     else if(activeTab === 'tabBranches') tasks.push(loadBranchesList());
     else if(activeTab === 'tabManagers') tasks.push(loadManagersList());
+    else if(activeTab === 'tabReportUsers') tasks.push(loadReportUsersList());
     else if(activeTab === 'tabActivity') tasks.push(loadActivityLog());
   } else if(document.getElementById('branchApp').style.display === 'block'){
     tasks.push(loadCurrentShift());
@@ -857,6 +946,10 @@ function refreshCurrentView(){
   } else if(document.getElementById('managerApp').style.display === 'block'){
     tasks.push(loadTillReference());
     tasks.push(loadManagerReport());
+  } else if(document.getElementById('reportApp').style.display === 'block'){
+    const activeRepTab = document.querySelector('#reportApp .tab-btn.active')?.dataset.reporttab;
+    if(activeRepTab === 'repTabCollections') tasks.push(loadReportCollReport());
+    else tasks.push(loadReportTillReport());
   }
 
   Promise.all(tasks)
@@ -1365,6 +1458,7 @@ async function initAdminApp(){
       document.getElementById(btn.dataset.tab).classList.add('active');
       if(btn.dataset.tab === 'tabBranches') loadBranchesList();
       if(btn.dataset.tab === 'tabManagers') loadManagersList();
+      if(btn.dataset.tab === 'tabReportUsers') loadReportUsersList();
       if(btn.dataset.tab === 'tabActivity') loadActivityLog();
       if(btn.dataset.tab === 'tabSyncs') loadAdminSyncReport();
     });
@@ -1402,6 +1496,7 @@ async function initAdminApp(){
   });
 
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
+  document.getElementById('addRepBtn').addEventListener('click', addReportUser);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
   document.getElementById('migrateBtn').addEventListener('click', runMigration);
   document.getElementById('deleteOldBtn').addEventListener('click', deleteOldInsecureRecords);
@@ -1528,6 +1623,70 @@ async function markFilteredCollectionsDone(){
 }
 
 const SYNC_TYPE_LABELS = { data: 'Sync Data', number: 'Sync Number', users: 'Sync Users' };
+async function initReportApp(){
+  await loadBranchList().catch(()=>{});
+  populateBranchSelect(document.getElementById('reportTillBranchFilter'), false);
+  populateBranchSelect(document.getElementById('reportCollBranchFilter'), false);
+
+  document.querySelectorAll('#reportApp .tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#reportApp .tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#reportApp .tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.reporttab).classList.add('active');
+      if(btn.dataset.reporttab === 'repTabCollections') loadReportCollReport();
+      else loadReportTillReport();
+    });
+  });
+
+  document.getElementById('reportTillBranchFilter').addEventListener('change', loadReportTillReport);
+  document.getElementById('reportTillDate').addEventListener('change', loadReportTillReport);
+  document.getElementById('clearReportTillFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('reportTillBranchFilter').value = '';
+    document.getElementById('reportTillDate').value = '';
+    loadReportTillReport();
+  });
+
+  document.getElementById('reportCollBranchFilter').addEventListener('change', loadReportCollReport);
+  document.getElementById('reportCollDateFrom').addEventListener('change', loadReportCollReport);
+  document.getElementById('reportCollDateTo').addEventListener('change', loadReportCollReport);
+  document.getElementById('clearReportCollFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('reportCollBranchFilter').value = '';
+    document.getElementById('reportCollDateFrom').value = '';
+    document.getElementById('reportCollDateTo').value = '';
+    loadReportCollReport();
+  });
+
+  loadReportTillReport();
+  loadReportCollReport();
+}
+
+async function loadReportTillReport(){
+  const branchVal = document.getElementById('reportTillBranchFilter').value;
+  const dateVal = document.getElementById('reportTillDate').value;
+  const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(dateVal) rows = rows.filter(r => (r.businessDate || '') === dateVal);
+  rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
+  renderTillRows(rows, 'reportTillBody', 'reportTillEmpty', false);
+}
+
+async function loadReportCollReport(){
+  const branchVal = document.getElementById('reportCollBranchFilter').value;
+  const fromVal = document.getElementById('reportCollDateFrom').value;
+  const toVal = document.getElementById('reportCollDateTo').value;
+  const snap = await db.collection(CONFIG.COLLECTIONS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+  renderCollectionRows(rows, 'reportCollBody', 'reportCollEmpty', false, false);
+}
+
 async function loadAdminSyncReport(){
   const branchVal = document.getElementById('adminSyncBranchFilter').value;
   const typeVal = document.getElementById('adminSyncTypeFilter').value;
@@ -1760,6 +1919,43 @@ async function loadManagersList(){
     if(!confirm('Remove this area manager\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
     await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.mgrdel).delete();
     loadManagersList();
+  }));
+}
+
+async function addReportUser(){
+  const name = document.getElementById('newRepName').value.trim();
+  const username = document.getElementById('newRepUser').value.trim().toLowerCase();
+  const password = document.getElementById('newRepPass').value.trim();
+  if(!name || !username || !password){ showToast('Sab fields bharein', true); return; }
+  try{
+    const { pw } = await createSecureAccount(username, password, { role: 'report', name });
+    showToast(pw === password ? 'Report user added' : `Report user added — password saved as "${pw}" (min 6 characters required)`);
+    document.getElementById('newRepName').value = '';
+    document.getElementById('newRepUser').value = '';
+    document.getElementById('newRepPass').value = '';
+    loadReportUsersList();
+  }catch(err){ showToast('Error: ' + err.message, true); }
+}
+
+async function loadReportUsersList(){
+  const snap = await db.collection(CONFIG.USERS_COLLECTION).where('role','==','report').get();
+  const tbody = document.getElementById('repListBody');
+  const empty = document.getElementById('repListEmpty');
+  tbody.innerHTML = '';
+  const rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.name}</td><td>${r.username}</td><td>Secured in Firebase Authentication</td>
+      <td><button type="button" class="link-btn del" data-repdel="${r.id}">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll('[data-repdel]').forEach(btn => btn.addEventListener('click', async ()=>{
+    if(!confirm('Remove this report user\'s access? (Their Firebase login will stop working once you also delete them from Firebase Console > Authentication.)')) return;
+    await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.repdel).delete();
+    loadReportUsersList();
   }));
 }
 
