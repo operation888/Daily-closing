@@ -357,6 +357,7 @@
     <div class="tabs">
       <button type="button" class="tab-btn active" data-reporttab="repTabTill">Till Opening &amp; Closing</button>
       <button type="button" class="tab-btn" data-reporttab="repTabCollections">Cash Collections</button>
+      <button type="button" class="tab-btn" data-reporttab="repTabSyncs">Branch Syncs</button>
     </div>
 
     <div class="tab-panel active card" id="repTabTill">
@@ -399,6 +400,32 @@
         </table>
       </div>
       <div class="empty" id="reportCollEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="repTabSyncs">
+      <h3>Branch Shift Syncs</h3>
+      <p class="hint">Data / Number / Users sync submitted by branches, twice daily (12 AM–12 PM, 12 PM–12 AM).</p>
+      <div class="admin-filters">
+        <select id="reportSyncBranchFilter"><option value="">All branches</option></select>
+        <select id="reportSyncTypeFilter">
+          <option value="">All sync types</option>
+          <option value="data">Sync Data</option>
+          <option value="number">Sync Number</option>
+          <option value="users">Sync Users</option>
+        </select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="reportSyncDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="reportSyncDateTo" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearReportSyncFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="reportSyncTable">
+          <thead><tr>
+            <th>Date</th><th>Shift</th><th>Branch</th><th>Sync Type</th><th>Time</th>
+          </tr></thead>
+          <tbody id="reportSyncBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="reportSyncEmpty" style="display:none;">No sync records found.</div>
     </div>
   </div>
 </div>
@@ -949,6 +976,7 @@ function refreshCurrentView(){
   } else if(document.getElementById('reportApp').style.display === 'block'){
     const activeRepTab = document.querySelector('#reportApp .tab-btn.active')?.dataset.reporttab;
     if(activeRepTab === 'repTabCollections') tasks.push(loadReportCollReport());
+    else if(activeRepTab === 'repTabSyncs') tasks.push(loadReportSyncReport());
     else tasks.push(loadReportTillReport());
   }
 
@@ -1627,6 +1655,7 @@ async function initReportApp(){
   await loadBranchList().catch(()=>{});
   populateBranchSelect(document.getElementById('reportTillBranchFilter'), false);
   populateBranchSelect(document.getElementById('reportCollBranchFilter'), false);
+  populateBranchSelect(document.getElementById('reportSyncBranchFilter'), false);
 
   document.querySelectorAll('#reportApp .tab-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -1635,6 +1664,7 @@ async function initReportApp(){
       btn.classList.add('active');
       document.getElementById(btn.dataset.reporttab).classList.add('active');
       if(btn.dataset.reporttab === 'repTabCollections') loadReportCollReport();
+      else if(btn.dataset.reporttab === 'repTabSyncs') loadReportSyncReport();
       else loadReportTillReport();
     });
   });
@@ -1655,6 +1685,18 @@ async function initReportApp(){
     document.getElementById('reportCollDateFrom').value = '';
     document.getElementById('reportCollDateTo').value = '';
     loadReportCollReport();
+  });
+
+  document.getElementById('reportSyncBranchFilter').addEventListener('change', loadReportSyncReport);
+  document.getElementById('reportSyncTypeFilter').addEventListener('change', loadReportSyncReport);
+  document.getElementById('reportSyncDateFrom').addEventListener('change', loadReportSyncReport);
+  document.getElementById('reportSyncDateTo').addEventListener('change', loadReportSyncReport);
+  document.getElementById('clearReportSyncFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('reportSyncBranchFilter').value = '';
+    document.getElementById('reportSyncTypeFilter').value = '';
+    document.getElementById('reportSyncDateFrom').value = '';
+    document.getElementById('reportSyncDateTo').value = '';
+    loadReportSyncReport();
   });
 
   loadReportTillReport();
@@ -1685,6 +1727,35 @@ async function loadReportCollReport(){
   if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
   rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
   renderCollectionRows(rows, 'reportCollBody', 'reportCollEmpty', false, false);
+}
+
+async function loadReportSyncReport(){
+  const branchVal = document.getElementById('reportSyncBranchFilter').value;
+  const typeVal = document.getElementById('reportSyncTypeFilter').value;
+  const fromVal = document.getElementById('reportSyncDateFrom').value;
+  const toVal = document.getElementById('reportSyncDateTo').value;
+  const snap = await db.collection(CONFIG.SYNC_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branchName === branchVal);
+  if(typeVal) rows = rows.filter(r => r.syncType === typeVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || '') || (a.shiftKey||'').localeCompare(b.shiftKey||''));
+
+  const tbody = document.getElementById('reportSyncBody');
+  const empty = document.getElementById('reportSyncEmpty');
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
+      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 async function loadAdminSyncReport(){
