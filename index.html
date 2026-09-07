@@ -604,20 +604,30 @@
   <div class="modal-box">
     <h3>Edit Till Record</h3>
     <div class="row">
+      <div><label>Branch</label><select id="etBranch"></select></div>
+      <div><label>Date</label><input type="date" id="etDate"></div>
+    </div>
+    <div class="row">
+      <div><label>Shift</label>
+        <select id="etShift">
+          <option value="Morning">Morning</option>
+          <option value="Night">Night</option>
+        </select>
+      </div>
       <div><label>Status</label>
         <select id="etStatus">
           <option value="open">Open</option>
           <option value="closed">Closed</option>
         </select>
       </div>
-      <div><label>Opening Cash</label><input type="number" step="any" id="etOpeningCash"></div>
     </div>
     <div class="row">
       <div><label>Opened By</label><input type="text" id="etOpenedBy"></div>
-      <div><label>Closing Cash</label><input type="number" step="any" id="etClosingCash"></div>
+      <div><label>Opening Cash</label><input type="number" step="any" id="etOpeningCash"></div>
     </div>
-    <div class="row single">
+    <div class="row">
       <div><label>Closed By</label><input type="text" id="etClosedBy"></div>
+      <div><label>Closing Cash</label><input type="number" step="any" id="etClosingCash"></div>
     </div>
     <div class="row single">
       <div><label>Notes</label><input type="text" id="etNotes"></div>
@@ -949,7 +959,7 @@ document.getElementById('managerLogoutBtn').addEventListener('click', ()=>{ auth
 document.getElementById('adminLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 document.getElementById('reportLogoutBtn').addEventListener('click', ()=>{ auth.signOut().catch(()=>{}); location.reload(); });
 
-// ===== Small corner refresh button — reloads only the current screen's data, no logout, no navigation =====
+// ===== Small corner refresh button — reloads the WHOLE dashboard's data, no logout, no navigation =====
 function refreshCurrentView(){
   const btn = document.getElementById('globalRefreshBtn');
   btn.classList.remove('spinning');
@@ -958,14 +968,13 @@ function refreshCurrentView(){
 
   const tasks = [];
   if(document.getElementById('adminApp').style.display === 'block'){
-    const activeTab = document.querySelector('#adminApp .tab-btn.active')?.dataset.tab;
-    if(activeTab === 'tabTill') tasks.push(loadAdminTillReport());
-    else if(activeTab === 'tabCollections') tasks.push(loadAdminCollReport());
-    else if(activeTab === 'tabSyncs') tasks.push(loadAdminSyncReport());
-    else if(activeTab === 'tabBranches') tasks.push(loadBranchesList());
-    else if(activeTab === 'tabManagers') tasks.push(loadManagersList());
-    else if(activeTab === 'tabReportUsers') tasks.push(loadReportUsersList());
-    else if(activeTab === 'tabActivity') tasks.push(loadActivityLog());
+    tasks.push(loadAdminTillReport());
+    tasks.push(loadAdminCollReport());
+    tasks.push(loadAdminSyncReport());
+    tasks.push(loadBranchesList());
+    tasks.push(loadManagersList());
+    tasks.push(loadReportUsersList());
+    tasks.push(loadActivityLog());
   } else if(document.getElementById('branchApp').style.display === 'block'){
     tasks.push(loadCurrentShift());
     tasks.push(loadSyncStatuses());
@@ -974,14 +983,13 @@ function refreshCurrentView(){
     tasks.push(loadTillReference());
     tasks.push(loadManagerReport());
   } else if(document.getElementById('reportApp').style.display === 'block'){
-    const activeRepTab = document.querySelector('#reportApp .tab-btn.active')?.dataset.reporttab;
-    if(activeRepTab === 'repTabCollections') tasks.push(loadReportCollReport());
-    else if(activeRepTab === 'repTabSyncs') tasks.push(loadReportSyncReport());
-    else tasks.push(loadReportTillReport());
+    tasks.push(loadReportTillReport());
+    tasks.push(loadReportCollReport());
+    tasks.push(loadReportSyncReport());
   }
 
   Promise.all(tasks)
-    .then(()=> showToast('Refreshed'))
+    .then(()=> showToast('Dashboard refreshed'))
     .catch((e)=> showToast('Refresh failed: ' + e.message, true));
 }
 document.getElementById('globalRefreshBtn').addEventListener('click', refreshCurrentView);
@@ -1086,12 +1094,17 @@ function renderShiftUI(){
 }
 
 document.getElementById('saveOpenBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('saveOpenBtn');
+  if(btn.disabled) return; // guard against double-click / double-submit
   const name = document.getElementById('openByName').value.trim();
   const cashVal = parseFloat(document.getElementById('openingCashInput').value);
   if(!name){ showToast('Apna naam daalein', true); return; }
   if(isNaN(cashVal)){ showToast('Opening cash amount daalein', true); return; }
   if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
   const info = getBusinessInfo();
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
   try{
     await withTimeout(db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).set({
       branch: currentBranch, branchSlug: currentBranchSlug,
@@ -1102,9 +1115,12 @@ document.getElementById('saveOpenBtn').addEventListener('click', async ()=>{
     await loadCurrentShift();
     loadBranchReport();
   }catch(err){ showToast('Error: ' + err.message, true); }
+  finally{ btn.disabled = false; btn.textContent = originalLabel; }
 });
 
 document.getElementById('closeBtn').addEventListener('click', async ()=>{
+  const btn = document.getElementById('closeBtn');
+  if(btn.disabled) return; // guard against double-click / double-submit
   const name = document.getElementById('closeByName').value.trim();
   const notes = document.getElementById('closeNotes').value.trim();
   const cashVal = parseFloat(document.getElementById('closingCashInput').value);
@@ -1112,14 +1128,18 @@ document.getElementById('closeBtn').addEventListener('click', async ()=>{
   if(isNaN(cashVal)){ showToast('Final cash count daalein', true); return; }
   if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
   if(!confirm(`Close till with final amount ${cashVal} riyal? This cannot be undone.`)) return;
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Closing...';
   try{
-    await db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).update({
+    await withTimeout(db.collection(CONFIG.TILLS_COLLECTION).doc(currentTillId).update({
       status: 'closed', closingCash: cashVal, closedBy: name, closeTime: serverTimestamp(), notes: notes || ''
-    });
+    }), 10000, 'Closing');
     showToast('Till closed successfully');
     await loadCurrentShift();
     loadBranchReport();
   }catch(err){ showToast('Error: ' + err.message, true); }
+  finally{ btn.disabled = false; btn.textContent = originalLabel; }
 });
 
 function renderTillRows(rows, tbodyId, emptyId, withActions){
@@ -1555,6 +1575,10 @@ function openTillEditModal(id, rows){
   const r = (rows || cachedTillRows).find(x => x.id === id);
   if(!r) return;
   editingTillId = id;
+  populateBranchSelect(document.getElementById('etBranch'), false);
+  document.getElementById('etBranch').value = r.branch || '';
+  document.getElementById('etDate').value = r.businessDate || '';
+  document.getElementById('etShift').value = r.shift || 'Morning';
   document.getElementById('etStatus').value = r.status || 'open';
   document.getElementById('etOpenedBy').value = r.openedBy || '';
   document.getElementById('etOpeningCash').value = r.openingCash ?? 0;
@@ -1570,7 +1594,13 @@ async function saveTillEdit(){
     const existing = cachedTillRows.find(x => x.id === editingTillId) || {};
     const status = document.getElementById('etStatus').value;
     const closedBy = document.getElementById('etClosedBy').value.trim();
+    const branchName = document.getElementById('etBranch').value;
+    const branchMatch = BRANCH_LIST.find(b => b.branch === branchName);
     const updateData = {
+      branch: branchName,
+      branchSlug: branchMatch ? branchMatch.id : (existing.branchSlug || ''),
+      businessDate: document.getElementById('etDate').value,
+      shift: document.getElementById('etShift').value,
       status,
       openedBy: document.getElementById('etOpenedBy').value.trim(),
       openingCash: num(document.getElementById('etOpeningCash').value),
