@@ -592,6 +592,7 @@
     <div class="tab-panel card" id="tabSetup">
       <h3>One-Time Setup</h3>
       <p class="hint">Step 1: Migrate everyone to secure Firebase Authentication logins. Step 2 (after confirming logins work): permanently delete the old plaintext password records.</p>
+      <button type="button" class="secondary" id="checkMigrateStatusBtn">0. Check current status</button>
       <button type="button" class="secondary" id="migrateBtn">1. Migrate accounts to secure login</button>
       <button type="button" class="secondary" id="deleteOldBtn" style="margin-left:10px;">2. Delete old insecure records</button>
       <p class="hint" id="migrateStatus" style="margin-top:10px;"></p>
@@ -1546,6 +1547,7 @@ async function initAdminApp(){
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addRepBtn').addEventListener('click', addReportUser);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
+  document.getElementById('checkMigrateStatusBtn').addEventListener('click', checkMigrationStatus);
   document.getElementById('migrateBtn').addEventListener('click', runMigration);
   document.getElementById('deleteOldBtn').addEventListener('click', deleteOldInsecureRecords);
   document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
@@ -1936,6 +1938,32 @@ async function loadBranchesList(){
     await db.collection(CONFIG.USERS_COLLECTION).doc(btn.dataset.branchdel).delete();
     loadBranchesList();
   }));
+}
+
+async function checkMigrationStatus(){
+  const statusEl = document.getElementById('migrateStatus');
+  statusEl.textContent = 'Checking...';
+  try{
+    const [adminSnap, branchSnap, mgrSnap, usersSnap] = await Promise.all([
+      db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).get(),
+      db.collection(CONFIG.BRANCH_LOGINS_COLLECTION).get(),
+      db.collection(CONFIG.MANAGERS_COLLECTION).get(),
+      db.collection(CONFIG.USERS_COLLECTION).get()
+    ]);
+    const oldCount = adminSnap.size + branchSnap.size + mgrSnap.size;
+    const secureCount = usersSnap.size;
+    if(oldCount === 0 && secureCount > 0){
+      statusEl.textContent = `✅ Fully migrated & cleaned up. ${secureCount} secure account(s) exist, 0 old plaintext records remain. Safe to tell the developer to remove the MIGRATION_SEED block from the code.`;
+    } else if(oldCount === 0 && secureCount === 0){
+      statusEl.textContent = `⚠️ No accounts found anywhere yet. Nothing to migrate — this looks like a brand-new setup.`;
+    } else if(oldCount > 0 && secureCount > 0){
+      statusEl.textContent = `⚠️ Partially migrated: ${secureCount} secure account(s) exist, but ${oldCount} OLD plaintext record(s) still remain (adminLogins: ${adminSnap.size}, branchLogins: ${branchSnap.size}, areaManagers: ${mgrSnap.size}). Run "1. Migrate" again to be safe, confirm everyone can log in, then click "2. Delete old insecure records".`;
+    } else {
+      statusEl.textContent = `❌ Not migrated yet: ${oldCount} old plaintext record(s) found (adminLogins: ${adminSnap.size}, branchLogins: ${branchSnap.size}, areaManagers: ${mgrSnap.size}), 0 secure accounts. Click "1. Migrate accounts to secure login" now.`;
+    }
+  }catch(err){
+    statusEl.textContent = 'Error checking status: ' + err.message;
+  }
 }
 
 async function runMigration(){
