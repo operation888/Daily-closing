@@ -739,25 +739,6 @@ const CONFIG = {
 };
 // ================================================================
 
-// ---- ONE-TIME MIGRATION SEED ----
-// This holds the OLD hardcoded logins so they can be pushed into Firestore once.
-// After you run the migration (Admin > Setup tab) and confirm it worked, tell
-// me and I will send you a cleaned file with this block removed completely,
-// so no password will exist in the page source anymore.
-const MIGRATION_SEED = {
-  admin: { username: "admin", password: "op998800" },
-  branches: [
-    { username: "sadyan", password: "10234", branch: "Sadyan branch" },
-    { username: "jamyeen", password: "20456", branch: "Jamyeen branch" },
-    { username: "wadi", password: "30678", branch: "Wadi branch" },
-    { username: "magic", password: "40891", branch: "Magic fair branch" },
-    { username: "fajer", password: "50123", branch: "Fajer branch" },
-    { username: "madina", password: "60345", branch: "Madina branch" },
-    { username: "nugra", password: "70567", branch: "Nugra branch" },
-    { username: "rajhi", password: "80789", branch: "Rajhi branch" }
-  ]
-};
-
 const firebaseApp = firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = firebase.firestore();
 const auth = firebaseApp.auth();
@@ -839,31 +820,6 @@ function populateBranchSelect(sel, includeBlank){
   });
 }
 
-// The very first admin login (old system) upgrades itself into a real, secure
-// Firebase Authentication account automatically, so everything after that
-// works under the new security rules.
-async function bootstrapAdminIfNeeded(username, password){
-  const pw = ensureMinPassword(password);
-  try{
-    const cred = await auth.createUserWithEmailAndPassword(emailFor(username), pw);
-    await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).set({ role: 'admin', username });
-    try{ await db.collection('system').doc('bootstrap').set({ adminCreated: true }); }catch(e){ /* non-fatal */ }
-    routeToApp({ role: 'admin', username });
-  }catch(err){
-    if(err.code === 'auth/email-already-in-use'){
-      try{
-        const cred = await auth.signInWithEmailAndPassword(emailFor(username), pw);
-        const profSnap = await db.collection(CONFIG.USERS_COLLECTION).doc(cred.user.uid).get();
-        routeToApp(profSnap.exists ? profSnap.data() : { role: 'admin', username });
-      }catch(e2){
-        routeToApp({ role: 'admin', username }, true);
-      }
-    } else {
-      routeToApp({ role: 'admin', username }, true);
-    }
-  }
-}
-
 // ===== UNIFIED LOGIN =====
 document.getElementById('loginForm').addEventListener('submit', async (e)=>{
   e.preventDefault();
@@ -885,39 +841,6 @@ document.getElementById('loginForm').addEventListener('submit', async (e)=>{
     debugNotes.push('Secure account exists but has no profile in "users" collection.');
     await auth.signOut();
   }catch(authErr){ debugNotes.push('Secure login: ' + authErr.code); }
-
-  // --- PATH B: one-time bootstrap using old Firestore-stored accounts (only works until you migrate + delete them) ---
-  try{
-    const aSnap = await db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).doc(u).get();
-    if(aSnap.exists && aSnap.data().password === p){
-      await bootstrapAdminIfNeeded(u, p);
-      return;
-    }
-    // Very first login ever, before any Firestore records exist at all: fall back to the
-    // built-in seed credentials so there is a way in to run the migration.
-    if(!aSnap.exists){
-      const adminCollSnap = await db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).limit(1).get();
-      if(adminCollSnap.empty && u === MIGRATION_SEED.admin.username && p === MIGRATION_SEED.admin.password){
-        await bootstrapAdminIfNeeded(u, p);
-        return;
-      }
-    }
-    debugNotes.push('adminLogins/' + u + ': ' + (aSnap.exists ? 'found, password did not match' : 'no document found'));
-  }catch(e0){ debugNotes.push('adminLogins read error: ' + e0.message); }
-  try{
-    const bSnap = await db.collection(CONFIG.BRANCH_LOGINS_COLLECTION).doc(u).get();
-    if(bSnap.exists && bSnap.data().password === p){
-      routeToApp({ role: 'branch', username: u, branch: bSnap.data().branch }, true);
-      return;
-    }
-  }catch(e1){ debugNotes.push('branchLogins read error: ' + e1.message); }
-  try{
-    const mSnap = await db.collection(CONFIG.MANAGERS_COLLECTION).doc(u).get();
-    if(mSnap.exists && mSnap.data().password === p){
-      routeToApp({ role: 'manager', username: u, name: mSnap.data().name }, true);
-      return;
-    }
-  }catch(e2){ debugNotes.push('areaManagers read error: ' + e2.message); }
 
   err.textContent = 'Incorrect username or password. (' + debugNotes.join(' | ') + ')';
   err.classList.add('show');
@@ -1967,7 +1890,7 @@ async function runMigration(){
   // Admin(s)
   try{
     const adminSnap = await db.collection(CONFIG.ADMIN_LOGINS_COLLECTION).get();
-    const adminList = adminSnap.empty ? [MIGRATION_SEED.admin] : adminSnap.docs.map(d => d.data());
+    const adminList = adminSnap.docs.map(d => d.data());
     for(const d of adminList){
       try{
         const { pw } = await createSecureAccount(d.username, d.password, { role: 'admin' });
@@ -1981,7 +1904,7 @@ async function runMigration(){
   // Branches
   try{
     const branchSnap = await db.collection(CONFIG.BRANCH_LOGINS_COLLECTION).get();
-    const branchList = branchSnap.empty ? MIGRATION_SEED.branches : branchSnap.docs.map(d => d.data());
+    const branchList = branchSnap.docs.map(d => d.data());
     for(const d of branchList){
       try{
         const { pw } = await createSecureAccount(d.username, d.password, { role: 'branch', branch: d.branch });
