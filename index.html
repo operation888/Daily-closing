@@ -590,6 +590,17 @@
     </div>
 
     <div class="tab-panel card" id="tabSetup">
+      <h3>Change My Password</h3>
+      <p class="hint">Update the password for the account you're currently logged in with (admin).</p>
+      <div class="row">
+        <div><label>Current Password</label><input type="password" id="curPwInput" autocomplete="current-password"></div>
+        <div><label>New Password (min 6 characters)</label><input type="password" id="newPwInput" autocomplete="new-password"></div>
+      </div>
+      <button type="button" class="primary" id="changePwBtn">Update Password</button>
+      <p class="hint" id="changePwStatus" style="margin-top:10px;"></p>
+
+      <hr style="border:none;border-top:1px dashed var(--line);margin:22px 0;">
+
       <h3>One-Time Setup</h3>
       <p class="hint">Step 1: Migrate everyone to secure Firebase Authentication logins. Step 2 (after confirming logins work): permanently delete the old plaintext password records.</p>
       <button type="button" class="secondary" id="migrateBtn">1. Migrate accounts to secure login</button>
@@ -1414,6 +1425,40 @@ async function loadSyncStatuses(){
 // ===== ADMIN APP =====
 let cachedTillRows = [], cachedCollRows = [];
 
+// Lets whoever is currently logged in change their own Firebase Authentication
+// password right from the dashboard. Firebase requires a "recent login" for
+// this sensitive action, so we reauthenticate with their current password first.
+async function changeMyPassword(){
+  const statusEl = document.getElementById('changePwStatus');
+  const curPw = document.getElementById('curPwInput').value;
+  const newPw = document.getElementById('newPwInput').value;
+  if(!curPw || !newPw){ showToast('Dono fields bharein', true); return; }
+  if(newPw.length < 6){ showToast('Naya password kam se kam 6 characters ka hona chahiye', true); return; }
+  const user = auth.currentUser;
+  if(!user){ showToast('Session expired, please log in again', true); return; }
+  const btn = document.getElementById('changePwBtn');
+  btn.disabled = true;
+  statusEl.textContent = 'Updating...';
+  try{
+    const credential = firebase.auth.EmailAuthProvider.credential(user.email, curPw);
+    await user.reauthenticateWithCredential(credential);
+    await user.updatePassword(newPw);
+    statusEl.textContent = 'Password updated successfully. Use the new password next time you log in.';
+    showToast('Password updated');
+    document.getElementById('curPwInput').value = '';
+    document.getElementById('newPwInput').value = '';
+  }catch(err){
+    if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
+      statusEl.textContent = 'Current password is incorrect.';
+    } else {
+      statusEl.textContent = 'Error: ' + err.message;
+    }
+    showToast('Password update failed', true);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 async function initAdminApp(){
   try{ await loadBranchList(); }catch(e){ showToast('Could not load branch list: ' + e.message, true); }
   populateBranchSelect(document.getElementById('adminTillBranchFilter'), false);
@@ -1469,6 +1514,7 @@ async function initAdminApp(){
   document.getElementById('addMgrBtn').addEventListener('click', addAreaManager);
   document.getElementById('addRepBtn').addEventListener('click', addReportUser);
   document.getElementById('addBranchBtn').addEventListener('click', addBranchLogin);
+  document.getElementById('changePwBtn').addEventListener('click', changeMyPassword);
   document.getElementById('migrateBtn').addEventListener('click', runMigration);
   document.getElementById('deleteOldBtn').addEventListener('click', deleteOldInsecureRecords);
   document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
