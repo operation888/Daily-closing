@@ -319,12 +319,41 @@
       <button type="button" class="primary" id="submitCollectionBtn">Submit Collection</button>
     </div>
 
-    <div class="card">
+    <div class="tabs">
+      <button type="button" class="tab-btn" data-mgrtab="mgrTabTill">Till Opening &amp; Closing</button>
+      <button type="button" class="tab-btn active" data-mgrtab="mgrTabCollections">Cash Collections</button>
+      <button type="button" class="tab-btn" data-mgrtab="mgrTabSyncs">Branch Syncs</button>
+    </div>
+
+    <div class="tab-panel card" id="mgrTabTill">
+      <h3>All Till Closing Records</h3>
+      <div class="admin-filters">
+        <select id="mgrTillBranchFilter"><option value="">All branches</option></select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="mgrTillDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="mgrTillDateTo" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearMgrTillFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="mgrTillTable">
+          <thead><tr>
+            <th>Branch</th><th>Date</th><th>Shift</th><th>Status</th>
+            <th>Opened By</th><th>Opening Cash</th>
+            <th>Closed By</th><th>Closing Cash</th>
+            <th>Close Time</th><th>Notes</th>
+          </tr></thead>
+          <tbody id="mgrTillBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="mgrTillEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel active card" id="mgrTabCollections">
       <h3>All Collections Report</h3>
       <p class="hint">Live data from every branch.</p>
       <div class="admin-filters">
         <select id="mgrBranchFilter"><option value="">All branches</option></select>
-        <input type="date" id="mgrDateFilter">
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="mgrDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="mgrDateTo" style="width:auto;display:inline-block;"></label>
       </div>
       <div class="table-wrap">
         <table id="mgrReportTable">
@@ -337,6 +366,32 @@
         </table>
       </div>
       <div class="empty" id="mgrReportEmpty" style="display:none;">No records found.</div>
+    </div>
+
+    <div class="tab-panel card" id="mgrTabSyncs">
+      <h3>Branch Shift Syncs</h3>
+      <p class="hint">Data / Number / Users sync submitted by branches, twice daily (12 AM–12 PM, 12 PM–12 AM).</p>
+      <div class="admin-filters">
+        <select id="mgrSyncBranchFilter"><option value="">All branches</option></select>
+        <select id="mgrSyncTypeFilter">
+          <option value="">All sync types</option>
+          <option value="data">Sync Data</option>
+          <option value="number">Sync Number</option>
+          <option value="users">Sync Users</option>
+        </select>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="mgrSyncDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="mgrSyncDateTo" style="width:auto;display:inline-block;"></label>
+        <button type="button" class="secondary" id="clearMgrSyncFiltersBtn">Clear Filters</button>
+      </div>
+      <div class="table-wrap">
+        <table id="mgrSyncTable">
+          <thead><tr>
+            <th>Date</th><th>Shift</th><th>Branch</th><th>Sync Type</th><th>Time</th>
+          </tr></thead>
+          <tbody id="mgrSyncBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="mgrSyncEmpty" style="display:none;">No sync records found.</div>
     </div>
   </div>
 </div>
@@ -364,7 +419,8 @@
       <h3>All Till Closing Records</h3>
       <div class="admin-filters">
         <select id="reportTillBranchFilter"><option value="">All branches</option></select>
-        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">Date <input type="date" id="reportTillDate" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="reportTillDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="reportTillDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearReportTillFiltersBtn">Clear Filters</button>
       </div>
       <div class="table-wrap">
@@ -458,7 +514,8 @@
       <h3>All Till Closing Records</h3>
       <div class="admin-filters">
         <select id="adminTillBranchFilter"><option value="">All branches</option></select>
-        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">Date <input type="date" id="adminTillDate" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminTillDateFrom" style="width:auto;display:inline-block;"></label>
+        <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminTillDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearTillFiltersBtn">Clear Filters</button>
       </div>
       <div class="table-wrap">
@@ -1124,17 +1181,56 @@ async function initManagerApp(){
   await loadBranchList();
   populateBranchSelect(document.getElementById('cBranch'), true);
   populateBranchSelect(document.getElementById('mgrBranchFilter'), false);
+  populateBranchSelect(document.getElementById('mgrTillBranchFilter'), false);
+  populateBranchSelect(document.getElementById('mgrSyncBranchFilter'), false);
 
   ['cDate','cBranch'].forEach(id => document.getElementById(id).addEventListener('change', loadTillReference));
   ['cFoodicsCash','cFoodicsATM','cActualCash','cActualATM'].forEach(id => document.getElementById(id).addEventListener('input', updatePreview));
 
   document.getElementById('submitCollectionBtn').addEventListener('click', submitCollection);
+
+  document.querySelectorAll('#managerApp .tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#managerApp .tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('#managerApp .tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.mgrtab).classList.add('active');
+      if(btn.dataset.mgrtab === 'mgrTabSyncs') loadMgrSyncReport();
+      else if(btn.dataset.mgrtab === 'mgrTabTill') loadMgrTillReport();
+      else loadManagerReport();
+    });
+  });
+
   document.getElementById('mgrBranchFilter').addEventListener('change', loadManagerReport);
-  document.getElementById('mgrDateFilter').addEventListener('change', loadManagerReport);
+  document.getElementById('mgrDateFrom').addEventListener('change', loadManagerReport);
+  document.getElementById('mgrDateTo').addEventListener('change', loadManagerReport);
+
+  document.getElementById('mgrTillBranchFilter').addEventListener('change', loadMgrTillReport);
+  document.getElementById('mgrTillDateFrom').addEventListener('change', loadMgrTillReport);
+  document.getElementById('mgrTillDateTo').addEventListener('change', loadMgrTillReport);
+  document.getElementById('clearMgrTillFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('mgrTillBranchFilter').value = '';
+    document.getElementById('mgrTillDateFrom').value = '';
+    document.getElementById('mgrTillDateTo').value = '';
+    loadMgrTillReport();
+  });
+
+  document.getElementById('mgrSyncBranchFilter').addEventListener('change', loadMgrSyncReport);
+  document.getElementById('mgrSyncTypeFilter').addEventListener('change', loadMgrSyncReport);
+  document.getElementById('mgrSyncDateFrom').addEventListener('change', loadMgrSyncReport);
+  document.getElementById('mgrSyncDateTo').addEventListener('change', loadMgrSyncReport);
+  document.getElementById('clearMgrSyncFiltersBtn').addEventListener('click', ()=>{
+    document.getElementById('mgrSyncBranchFilter').value = '';
+    document.getElementById('mgrSyncTypeFilter').value = '';
+    document.getElementById('mgrSyncDateFrom').value = '';
+    document.getElementById('mgrSyncDateTo').value = '';
+    loadMgrSyncReport();
+  });
 
   loadTillReference();
   updatePreview();
   loadManagerReport();
+  loadMgrTillReport();
 }
 
 async function loadTillReference(){
@@ -1281,14 +1377,59 @@ function renderCollectionRows(rows, tbodyId, emptyId, withActions, allowNoteEdit
 
 async function loadManagerReport(){
   const branchVal = document.getElementById('mgrBranchFilter').value;
-  const dateVal = document.getElementById('mgrDateFilter').value;
+  const fromVal = document.getElementById('mgrDateFrom').value;
+  const toVal = document.getElementById('mgrDateTo').value;
   const snap = await db.collection(CONFIG.COLLECTIONS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(dateVal) rows = rows.filter(r => r.date === dateVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
   rows.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
   renderCollectionRows(rows, 'mgrReportBody', 'mgrReportEmpty', false, true);
+}
+
+async function loadMgrTillReport(){
+  const branchVal = document.getElementById('mgrTillBranchFilter').value;
+  const fromVal = document.getElementById('mgrTillDateFrom').value;
+  const toVal = document.getElementById('mgrTillDateTo').value;
+  const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branch === branchVal);
+  if(fromVal) rows = rows.filter(r => (r.businessDate || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.businessDate || '') <= toVal);
+  rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
+  renderTillRows(rows, 'mgrTillBody', 'mgrTillEmpty', false);
+}
+
+async function loadMgrSyncReport(){
+  const branchVal = document.getElementById('mgrSyncBranchFilter').value;
+  const typeVal = document.getElementById('mgrSyncTypeFilter').value;
+  const fromVal = document.getElementById('mgrSyncDateFrom').value;
+  const toVal = document.getElementById('mgrSyncDateTo').value;
+  const snap = await db.collection(CONFIG.SYNC_COLLECTION).get();
+  let rows = [];
+  snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+  if(branchVal) rows = rows.filter(r => r.branchName === branchVal);
+  if(typeVal) rows = rows.filter(r => r.syncType === typeVal);
+  if(fromVal) rows = rows.filter(r => (r.date || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.date || '') <= toVal);
+  rows.sort((a,b) => (b.date || '').localeCompare(a.date || '') || (a.shiftKey||'').localeCompare(b.shiftKey||''));
+
+  const tbody = document.getElementById('mgrSyncBody');
+  const empty = document.getElementById('mgrSyncEmpty');
+  tbody.innerHTML = '';
+  if(rows.length === 0){ empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
+      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 // ===== SHIFT SYNC TASKS (twice daily: 12 AM–12 PM and 12 PM–12 AM) =====
@@ -1481,10 +1622,12 @@ async function initAdminApp(){
   });
 
   document.getElementById('adminTillBranchFilter').addEventListener('change', loadAdminTillReport);
-  document.getElementById('adminTillDate').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDateFrom').addEventListener('change', loadAdminTillReport);
+  document.getElementById('adminTillDateTo').addEventListener('change', loadAdminTillReport);
   document.getElementById('clearTillFiltersBtn').addEventListener('click', ()=>{
     document.getElementById('adminTillBranchFilter').value = '';
-    document.getElementById('adminTillDate').value = '';
+    document.getElementById('adminTillDateFrom').value = '';
+    document.getElementById('adminTillDateTo').value = '';
     loadAdminTillReport();
   });
 
@@ -1528,12 +1671,14 @@ async function initAdminApp(){
 
 async function loadAdminTillReport(){
   const branchVal = document.getElementById('adminTillBranchFilter').value;
-  const dateVal = document.getElementById('adminTillDate').value;
+  const fromVal = document.getElementById('adminTillDateFrom').value;
+  const toVal = document.getElementById('adminTillDateTo').value;
   const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(dateVal) rows = rows.filter(r => (r.businessDate || '') === dateVal);
+  if(fromVal) rows = rows.filter(r => (r.businessDate || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.businessDate || '') <= toVal);
   rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
   cachedTillRows = rows;
   renderTillRows(rows, 'adminTillBody', 'adminTillEmpty', true);
@@ -1669,10 +1814,12 @@ async function initReportApp(){
   });
 
   document.getElementById('reportTillBranchFilter').addEventListener('change', loadReportTillReport);
-  document.getElementById('reportTillDate').addEventListener('change', loadReportTillReport);
+  document.getElementById('reportTillDateFrom').addEventListener('change', loadReportTillReport);
+  document.getElementById('reportTillDateTo').addEventListener('change', loadReportTillReport);
   document.getElementById('clearReportTillFiltersBtn').addEventListener('click', ()=>{
     document.getElementById('reportTillBranchFilter').value = '';
-    document.getElementById('reportTillDate').value = '';
+    document.getElementById('reportTillDateFrom').value = '';
+    document.getElementById('reportTillDateTo').value = '';
     loadReportTillReport();
   });
 
@@ -1704,12 +1851,14 @@ async function initReportApp(){
 
 async function loadReportTillReport(){
   const branchVal = document.getElementById('reportTillBranchFilter').value;
-  const dateVal = document.getElementById('reportTillDate').value;
+  const fromVal = document.getElementById('reportTillDateFrom').value;
+  const toVal = document.getElementById('reportTillDateTo').value;
   const snap = await db.collection(CONFIG.TILLS_COLLECTION).get();
   let rows = [];
   snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
   if(branchVal) rows = rows.filter(r => r.branch === branchVal);
-  if(dateVal) rows = rows.filter(r => (r.businessDate || '') === dateVal);
+  if(fromVal) rows = rows.filter(r => (r.businessDate || '') >= fromVal);
+  if(toVal) rows = rows.filter(r => (r.businessDate || '') <= toVal);
   rows.sort((a,b) => (b.businessDate || '').localeCompare(a.businessDate || '') || (a.shift||'').localeCompare(b.shift||''));
   renderTillRows(rows, 'reportTillBody', 'reportTillEmpty', false);
 }
