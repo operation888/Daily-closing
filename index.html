@@ -837,6 +837,83 @@ function showToast(msg, isErr){
 }
 function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
 
+// ===== GENERIC TABLE SORTING (▲/▼ arrows in every column header, works for every table & every user) =====
+// Call initSortableTable('someTableId') once for any table that has a <thead> and <tbody>.
+// Clicking a header sorts the rows CURRENTLY in that table's <tbody> by that column,
+// toggling ascending/descending on repeat clicks. Numeric-looking columns sort numerically,
+// everything else sorts alphabetically. Any "totals-row" stays pinned at the bottom.
+function initSortableTable(tableId){
+  const table = document.getElementById(tableId);
+  if(!table || table.dataset.sortInit) return;
+  const thead = table.querySelector('thead');
+  if(!thead) return;
+  table.dataset.sortInit = '1';
+  thead.querySelectorAll('th').forEach((th, idx) => {
+    if(!th.textContent.trim()) return; // skip blank/action columns
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    th.style.whiteSpace = 'nowrap';
+    const arrow = document.createElement('span');
+    arrow.className = 'sort-arrow';
+    arrow.style.marginLeft = '5px';
+    arrow.style.opacity = '0.55';
+    arrow.style.fontSize = '10px';
+    arrow.textContent = '⇅';
+    th.appendChild(arrow);
+    th.addEventListener('click', () => sortTableByColumn(table, idx, th));
+  });
+}
+
+function sortTableByColumn(table, colIndex, th){
+  const tbody = table.querySelector('tbody');
+  if(!tbody) return;
+  let rows = Array.from(tbody.querySelectorAll('tr'));
+  const totalsRows = rows.filter(r => r.classList.contains('totals-row'));
+  rows = rows.filter(r => !r.classList.contains('totals-row'));
+  if(rows.length === 0) return;
+
+  const newDir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+
+  table.querySelectorAll('thead th').forEach(h => {
+    h.dataset.sortDir = '';
+    const a = h.querySelector('.sort-arrow');
+    if(a){ a.textContent = '⇅'; a.style.opacity = '0.55'; }
+  });
+  th.dataset.sortDir = newDir;
+  const arrow = th.querySelector('.sort-arrow');
+  if(arrow){ arrow.textContent = newDir === 'asc' ? '▲' : '▼'; arrow.style.opacity = '1'; }
+
+  const cellText = (row) => {
+    const cell = row.children[colIndex];
+    return cell ? cell.textContent.trim() : '';
+  };
+
+  rows.sort((rowA, rowB) => {
+    const a = cellText(rowA), b = cellText(rowB);
+    const numA = parseFloat(a.replace(/[^0-9.\-]/g,''));
+    const numB = parseFloat(b.replace(/[^0-9.\-]/g,''));
+    const looksNumeric = (s) => s === '' || /^-?[\d,]*\.?\d*$/.test(s);
+    let cmp;
+    if(a !== '' && b !== '' && !isNaN(numA) && !isNaN(numB) && looksNumeric(a) && looksNumeric(b)){
+      cmp = numA - numB;
+    } else {
+      cmp = a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    }
+    return newDir === 'asc' ? cmp : -cmp;
+  });
+
+  rows.forEach(r => tbody.appendChild(r));
+  totalsRows.forEach(r => tbody.appendChild(r));
+}
+
+// Turn on sorting for every data table in the dashboard — branch, manager, admin and report views alike.
+[
+  'staffReportTable','mgrTillTable','mgrReportTable','mgrSyncTable',
+  'reportTillTable','reportCollTable','reportSyncTable',
+  'adminTillTable','adminCollTable','adminSyncTable',
+  'branchListTable','mgrListTable','repListTable','activityTable'
+].forEach(initSortableTable);
+
 function getBusinessInfo(now = new Date()){
   const h = now.getHours() + now.getMinutes()/60;
   const start = CONFIG.DAY_START_HOUR;
