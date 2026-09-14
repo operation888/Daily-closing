@@ -517,7 +517,9 @@
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">From <input type="date" id="adminTillDateFrom" style="width:auto;display:inline-block;"></label>
         <label style="margin:0;font-size:12px;color:var(--ink-soft);align-self:center;">To <input type="date" id="adminTillDateTo" style="width:auto;display:inline-block;"></label>
         <button type="button" class="secondary" id="clearTillFiltersBtn">Clear Filters</button>
+        <button type="button" class="primary" id="addTillBtn">+ Add Till Record</button>
       </div>
+      <p class="hint" style="margin-top:-4px;">Agar kisi din branch ne till open/close nahi kiya to us din ka missing record yahan se manually bana sakte hain.</p>
       <div class="table-wrap">
         <table id="adminTillTable">
           <thead><tr>
@@ -670,7 +672,7 @@
 <!-- ===================== EDIT MODALS (Admin) ===================== -->
 <div class="modal-overlay" id="editTillModal">
   <div class="modal-box">
-    <h3>Edit Till Record</h3>
+    <h3 id="etModalTitle">Edit Till Record</h3>
     <div class="row">
       <div><label>Branch</label><select id="etBranch"></select></div>
       <div><label>Date</label><input type="date" id="etDate"></div>
@@ -1737,8 +1739,13 @@ async function initAdminApp(){
   document.getElementById('changePwBtn').addEventListener('click', changeMyPassword);
   document.getElementById('migrateBtn').addEventListener('click', runMigration);
   document.getElementById('deleteOldBtn').addEventListener('click', deleteOldInsecureRecords);
+  document.getElementById('addTillBtn').addEventListener('click', openTillAddModal);
   document.getElementById('saveTillEditBtn').addEventListener('click', saveTillEdit);
-  document.getElementById('cancelTillEditBtn').addEventListener('click', ()=> document.getElementById('editTillModal').classList.remove('show'));
+  document.getElementById('cancelTillEditBtn').addEventListener('click', ()=>{
+    document.getElementById('editTillModal').classList.remove('show');
+    editingTillId = null;
+    isAddingTill = false;
+  });
   document.getElementById('saveCollEditBtn').addEventListener('click', saveCollEdit);
   document.getElementById('cancelCollEditBtn').addEventListener('click', ()=> document.getElementById('editCollModal').classList.remove('show'));
 
@@ -1762,10 +1769,13 @@ async function loadAdminTillReport(){
 }
 
 let editingTillId = null;
+let isAddingTill = false;
 function openTillEditModal(id, rows){
   const r = (rows || cachedTillRows).find(x => x.id === id);
   if(!r) return;
   editingTillId = id;
+  isAddingTill = false;
+  document.getElementById('etModalTitle').textContent = 'Edit Till Record';
   populateBranchSelect(document.getElementById('etBranch'), false);
   document.getElementById('etBranch').value = r.branch || '';
   document.getElementById('etDate').value = r.businessDate || '';
@@ -1779,38 +1789,99 @@ function openTillEditModal(id, rows){
   document.getElementById('editTillModal').classList.add('show');
 }
 
+// Admin manually creates a fresh till record for a day the branch missed
+// (never opened, so nothing exists to edit). Same modal as "Edit", just
+// pre-filled blank and saved as a brand-new document instead of an update.
+function openTillAddModal(){
+  editingTillId = 'NEW';
+  isAddingTill = true;
+  document.getElementById('etModalTitle').textContent = 'Add Till Record (Manual Entry)';
+  populateBranchSelect(document.getElementById('etBranch'), true);
+  document.getElementById('etBranch').value = '';
+  const info = getBusinessInfo();
+  document.getElementById('etDate').value = info.businessDate;
+  document.getElementById('etShift').value = info.shift;
+  document.getElementById('etStatus').value = 'closed';
+  document.getElementById('etOpenedBy').value = '';
+  document.getElementById('etOpeningCash').value = 0;
+  document.getElementById('etClosedBy').value = '';
+  document.getElementById('etClosingCash').value = 0;
+  document.getElementById('etNotes').value = 'Added manually by admin — branch did not open/close till.';
+  document.getElementById('editTillModal').classList.add('show');
+}
+
 async function saveTillEdit(){
   if(!editingTillId) return;
+  const branchName = document.getElementById('etBranch').value;
+  const businessDate = document.getElementById('etDate').value;
+  const shiftVal = document.getElementById('etShift').value;
+  const status = document.getElementById('etStatus').value;
+  const closedBy = document.getElementById('etClosedBy').value.trim();
+
+  if(!branchName || !businessDate || !shiftVal){ showToast('Branch, date aur shift select karein', true); return; }
+
   try{
-    const existing = cachedTillRows.find(x => x.id === editingTillId) || {};
-    const status = document.getElementById('etStatus').value;
-    const closedBy = document.getElementById('etClosedBy').value.trim();
-    const branchName = document.getElementById('etBranch').value;
     const branchMatch = BRANCH_LIST.find(b => b.branch === branchName);
-    const updateData = {
-      branch: branchName,
-      branchSlug: branchMatch ? branchMatch.id : (existing.branchSlug || ''),
-      businessDate: document.getElementById('etDate').value,
-      shift: document.getElementById('etShift').value,
-      status,
-      openedBy: document.getElementById('etOpenedBy').value.trim(),
-      openingCash: num(document.getElementById('etOpeningCash').value),
-      closedBy,
-      closingCash: num(document.getElementById('etClosingCash').value),
-      notes: document.getElementById('etNotes').value.trim()
-    };
-    // If admin is marking this record as Closed and there's no close time yet
-    // (e.g. it was stuck on "Open" with wrong/missing numbers), stamp it now.
-    if(status === 'closed' && !existing.closeTime){
-      updateData.closeTime = serverTimestamp();
+    const branchSlug = branchMatch ? branchMatch.id : slugify(branchName);
+
+    if(isAddingTill){
+      // Manual entry: the branch never opened/closed this shift so no document
+      // exists yet. Build the same doc id the branch app itself would use, so
+      // it slots into the normal reports exactly like a real branch entry.
+      const docId = `${branchSlug}_${businessDate}_${shiftVal}`;
+      const existingSnap = await db.collection(CONFIG.TILLS_COLLECTION).doc(docId).get();
+      if(existingSnap.exists){
+        showToast('Is branch/date/shift ka record pehle se maujood hai — "Edit" button se update karein.', true);
+        return;
+      }
+      const newData = {
+        branch: branchName,
+        branchSlug,
+        businessDate,
+        shift: shiftVal,
+        status,
+        openedBy: document.getElementById('etOpenedBy').value.trim(),
+        openingCash: num(document.getElementById('etOpeningCash').value),
+        closedBy,
+        closingCash: num(document.getElementById('etClosingCash').value),
+        notes: document.getElementById('etNotes').value.trim(),
+        openTime: serverTimestamp(),
+        addedManuallyByAdmin: true
+      };
+      if(status === 'closed'){ newData.closeTime = serverTimestamp(); }
+      await db.collection(CONFIG.TILLS_COLLECTION).doc(docId).set(newData);
+      await logActivity('manual-entry', 'Admin', `${branchName} — ${businessDate} — ${shiftVal} — till record added manually`);
+      showToast('Till record added successfully');
+    } else {
+      const existing = cachedTillRows.find(x => x.id === editingTillId) || {};
+      const updateData = {
+        branch: branchName,
+        branchSlug: branchMatch ? branchMatch.id : (existing.branchSlug || ''),
+        businessDate,
+        shift: shiftVal,
+        status,
+        openedBy: document.getElementById('etOpenedBy').value.trim(),
+        openingCash: num(document.getElementById('etOpeningCash').value),
+        closedBy,
+        closingCash: num(document.getElementById('etClosingCash').value),
+        notes: document.getElementById('etNotes').value.trim()
+      };
+      // If admin is marking this record as Closed and there's no close time yet
+      // (e.g. it was stuck on "Open" with wrong/missing numbers), stamp it now.
+      if(status === 'closed' && !existing.closeTime){
+        updateData.closeTime = serverTimestamp();
+      }
+      // If admin reopens a record, clear the close time so it shows correctly.
+      if(status === 'open'){
+        updateData.closeTime = firebase.firestore.FieldValue.delete();
+      }
+      await db.collection(CONFIG.TILLS_COLLECTION).doc(editingTillId).update(updateData);
+      showToast('Till record updated');
     }
-    // If admin reopens a record, clear the close time so it shows correctly.
-    if(status === 'open'){
-      updateData.closeTime = firebase.firestore.FieldValue.delete();
-    }
-    await db.collection(CONFIG.TILLS_COLLECTION).doc(editingTillId).update(updateData);
-    showToast('Till record updated');
+
     document.getElementById('editTillModal').classList.remove('show');
+    editingTillId = null;
+    isAddingTill = false;
     loadAdminTillReport();
   }catch(err){ showToast('Error: ' + err.message, true); }
 }
