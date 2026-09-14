@@ -1220,16 +1220,24 @@ function renderTillRows(rows, tbodyId, emptyId, withActions){
   empty.style.display = 'none';
   rows.forEach(r=>{
     const tr = document.createElement('tr');
+    const hasNote = r.notes && String(r.notes).trim();
+    const noteCell = hasNote
+      ? `<button type="button" class="note-btn" data-tillviewnote="${r.id}">📝 Note</button>`
+      : '<span class="no-note">—</span>';
     tr.innerHTML = `
       <td>${r.branch || ''}</td><td>${r.businessDate || ''}</td><td>${r.shift || ''}</td>
       <td><span class="status-badge ${r.status}">${(r.status||'').replace('-', ' ')}</span></td>
       <td>${r.openedBy || ''}</td><td>${r.openingCash != null ? r.openingCash : ''}</td>
       <td>${r.closedBy || ''}</td><td>${r.closingCash != null ? r.closingCash : ''}</td>
-      <td>${fmtTime(r.closeTime)}</td><td>${r.notes || ''}</td>
+      <td>${fmtTime(r.closeTime)}</td><td>${noteCell}</td>
       ${withActions ? `<td><button type="button" class="link-btn" data-tedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-tdel="${r.id}">Delete</button></td>` : ''}
     `;
     tbody.appendChild(tr);
   });
+  tbody.querySelectorAll('[data-tillviewnote]').forEach(btn => btn.addEventListener('click', ()=>{
+    const r = rows.find(x => x.id === btn.dataset.tillviewnote);
+    openNoteModal(r ? r.notes : '');
+  }));
   if(withActions){
     tbody.querySelectorAll('[data-tedit]').forEach(btn => btn.addEventListener('click', ()=> openTillEditModal(btn.dataset.tedit, rows)));
     tbody.querySelectorAll('[data-tdel]').forEach(btn => btn.addEventListener('click', async ()=>{
