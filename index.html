@@ -1238,6 +1238,34 @@ function renderTillRows(rows, tbodyId, emptyId, withActions){
     const r = rows.find(x => x.id === btn.dataset.tillviewnote);
     openNoteModal(r ? r.notes : '');
   }));
+
+  // Totals row: sums Opening Cash and Closing Cash across every CLOSED shift currently
+  // shown (respecting whatever branch/date filters are applied), then shows Net Sale
+  // = total Closing Cash - total Opening Cash — i.e. how much cash sale actually
+  // happened across all those shifts, same idea as the Foodics vs actual math above.
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const closedRows = rows.filter(r => r.status === 'closed' && r.closingCash != null);
+  const tillTotals = closedRows.reduce((acc, r) => {
+    acc.opening += Number(r.openingCash) || 0;
+    acc.closing += Number(r.closingCash) || 0;
+    return acc;
+  }, { opening: 0, closing: 0 });
+  tillTotals.opening = round2(tillTotals.opening);
+  tillTotals.closing = round2(tillTotals.closing);
+  const netSales = round2(tillTotals.closing - tillTotals.opening);
+
+  const totalTr = document.createElement('tr');
+  totalTr.className = 'totals-row';
+  totalTr.innerHTML = `
+    <td colspan="5" style="text-align:right;">TOTAL — ${closedRows.length} closed shift${closedRows.length === 1 ? '' : 's'}</td>
+    <td>${tillTotals.opening}</td>
+    <td></td>
+    <td>${tillTotals.closing}</td>
+    <td colspan="2" class="${netSales < 0 ? 'neg' : 'pos'}">Net Sale: ${netSales}</td>
+    ${withActions ? '<td></td>' : ''}
+  `;
+  tbody.appendChild(totalTr);
+
   if(withActions){
     tbody.querySelectorAll('[data-tedit]').forEach(btn => btn.addEventListener('click', ()=> openTillEditModal(btn.dataset.tedit, rows)));
     tbody.querySelectorAll('[data-tdel]').forEach(btn => btn.addEventListener('click', async ()=>{
