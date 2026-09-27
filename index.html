@@ -69,7 +69,7 @@
   .shift-pill{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;flex:1;min-width:110px;text-align:center;}
   .shift-pill span{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);margin-bottom:3px;}
 
-  .status-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+  .status-badge{display:inline-block;padding:4px 10px;border-radius:20px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;}
   .status-badge.not-opened{background:var(--alert-bg);color:var(--alert);}
   .status-badge.open{background:var(--pending-bg);color:var(--pending);}
   .status-badge.closed{background:var(--ok-bg);color:var(--ok);}
@@ -135,6 +135,15 @@
   .note-btn{background:var(--beige-2);border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700;color:var(--accent);font-family:Georgia,serif;}
   .note-btn:hover{border-color:var(--accent);background:var(--accent-light);color:var(--green-deep);}
   .no-note{color:var(--ink-soft);font-size:12px;}
+
+  /* ---- keep the normal table (columns side-by-side, like before) but make it
+     fit the page width with no horizontal scrollbar: columns wrap their text
+     instead of forcing the table wider than the screen. ---- */
+  .table-wrap{ overflow-x:visible; }
+  table{ table-layout:fixed; width:100%; }
+  th, td{ white-space:normal; word-break:break-word; overflow-wrap:break-word; }
+  th{ font-size:9.5px; padding:7px 6px; }
+  td{ font-size:11px; padding:6px 6px; }
 </style>
 </head>
 <body>
@@ -854,7 +863,6 @@ function initSortableTable(tableId){
     if(!th.textContent.trim()) return; // skip blank/action columns
     th.style.cursor = 'pointer';
     th.style.userSelect = 'none';
-    th.style.whiteSpace = 'nowrap';
     const arrow = document.createElement('span');
     arrow.className = 'sort-arrow';
     arrow.style.marginLeft = '5px';
@@ -1225,12 +1233,12 @@ function renderTillRows(rows, tbodyId, emptyId, withActions){
       ? `<button type="button" class="note-btn" data-tillviewnote="${r.id}">📝 Note</button>`
       : '<span class="no-note">—</span>';
     tr.innerHTML = `
-      <td>${r.branch || ''}</td><td>${r.businessDate || ''}</td><td>${r.shift || ''}</td>
-      <td><span class="status-badge ${r.status}">${(r.status||'').replace('-', ' ')}</span></td>
-      <td>${r.openedBy || ''}</td><td>${r.openingCash != null ? r.openingCash : ''}</td>
-      <td>${r.closedBy || ''}</td><td>${r.closingCash != null ? r.closingCash : ''}</td>
-      <td>${fmtTime(r.closeTime)}</td><td>${noteCell}</td>
-      ${withActions ? `<td><button type="button" class="link-btn" data-tedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-tdel="${r.id}">Delete</button></td>` : ''}
+      <td data-label="Branch">${r.branch || ''}</td><td data-label="Date">${r.businessDate || ''}</td><td data-label="Shift">${r.shift || ''}</td>
+      <td data-label="Status"><span class="status-badge ${r.status}">${(r.status||'').replace('-', ' ')}</span></td>
+      <td data-label="Opened By">${r.openedBy || ''}</td><td data-label="Opening Cash">${r.openingCash != null ? r.openingCash : ''}</td>
+      <td data-label="Closed By">${r.closedBy || ''}</td><td data-label="Closing Cash">${r.closingCash != null ? r.closingCash : ''}</td>
+      <td data-label="Close Time">${fmtTime(r.closeTime)}</td><td data-label="Notes">${noteCell}</td>
+      ${withActions ? `<td data-label="Actions"><button type="button" class="link-btn" data-tedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-tdel="${r.id}">Delete</button></td>` : ''}
     `;
     tbody.appendChild(tr);
   });
@@ -1257,11 +1265,11 @@ function renderTillRows(rows, tbodyId, emptyId, withActions){
   const totalTr = document.createElement('tr');
   totalTr.className = 'totals-row';
   totalTr.innerHTML = `
-    <td colspan="5" style="text-align:right;">TOTAL — ${closedRows.length} closed shift${closedRows.length === 1 ? '' : 's'}</td>
-    <td>${tillTotals.opening}</td>
+    <td colspan="5" data-label="Total" style="text-align:right;">TOTAL — ${closedRows.length} closed shift${closedRows.length === 1 ? '' : 's'}</td>
+    <td data-label="Opening Cash Total">${tillTotals.opening}</td>
     <td></td>
-    <td>${tillTotals.closing}</td>
-    <td colspan="2" class="${netSales < 0 ? 'neg' : 'pos'}">Net Sale: ${netSales}</td>
+    <td data-label="Closing Cash Total">${tillTotals.closing}</td>
+    <td colspan="2" data-label="Net Sale" class="${netSales < 0 ? 'neg' : 'pos'}">Net Sale: ${netSales}</td>
     ${withActions ? '<td></td>' : ''}
   `;
   tbody.appendChild(totalTr);
@@ -1434,13 +1442,13 @@ function renderCollectionRows(rows, tbodyId, emptyId, withActions, allowNoteEdit
       noteCell = hasNote ? `<button type="button" class="note-btn" data-viewnote="${r.id}">📝 Note</button>` : '<span class="no-note">—</span>';
     }
     tr.innerHTML = `
-      <td>${r.date || ''}</td><td>${fmtClockTime(r.timestamp)}</td><td>${r.branch || ''}</td><td>${r.cashCollectedTotal ?? ''}</td>
-      <td>${r.whoCollected || ''}</td>
-      <td><span class="status-badge ${r.submittedFinanceStatus}">${r.submittedFinanceStatus || ''}</span></td>
-      <td>${r.moreCash ?? 0}</td><td>${r.moreATM ?? 0}</td><td>${r.shortCash ?? 0}</td><td>${r.shortATM ?? 0}</td>
-      <td class="${(r.total||0) < 0 ? 'neg' : 'pos'}">${r.total ?? 0}</td>
-      <td>${noteCell}</td>
-      ${withActions ? `<td><button type="button" class="link-btn" data-cedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-cdel="${r.id}">Delete</button></td>` : ''}
+      <td data-label="Date">${r.date || ''}</td><td data-label="Time">${fmtClockTime(r.timestamp)}</td><td data-label="Branch">${r.branch || ''}</td><td data-label="Cash Collected">${r.cashCollectedTotal ?? ''}</td>
+      <td data-label="Who Collected">${r.whoCollected || ''}</td>
+      <td data-label="Finance Status"><span class="status-badge ${r.submittedFinanceStatus}">${r.submittedFinanceStatus || ''}</span></td>
+      <td data-label="More Cash">${r.moreCash ?? 0}</td><td data-label="More ATM">${r.moreATM ?? 0}</td><td data-label="Short Cash">${r.shortCash ?? 0}</td><td data-label="Short ATM">${r.shortATM ?? 0}</td>
+      <td data-label="Total" class="${(r.total||0) < 0 ? 'neg' : 'pos'}">${r.total ?? 0}</td>
+      <td data-label="Note">${noteCell}</td>
+      ${withActions ? `<td data-label="Actions"><button type="button" class="link-btn" data-cedit="${r.id}">Edit</button> <button type="button" class="link-btn del" data-cdel="${r.id}">Delete</button></td>` : ''}
     `;
     tbody.appendChild(tr);
   });
@@ -1461,11 +1469,11 @@ function renderCollectionRows(rows, tbodyId, emptyId, withActions, allowNoteEdit
   const totalTr = document.createElement('tr');
   totalTr.className = 'totals-row';
   totalTr.innerHTML = `
-    <td colspan="3" style="text-align:right;">TOTAL — ${rows.length} record${rows.length === 1 ? '' : 's'}</td>
-    <td>${totals.cashCollected}</td>
+    <td colspan="3" data-label="Total" style="text-align:right;">TOTAL — ${rows.length} record${rows.length === 1 ? '' : 's'}</td>
+    <td data-label="Cash Collected Total">${totals.cashCollected}</td>
     <td colspan="2"></td>
-    <td>${totals.moreCash}</td><td>${totals.moreATM}</td><td>${totals.shortCash}</td><td>${totals.shortATM}</td>
-    <td class="${totals.total < 0 ? 'neg' : 'pos'}">${totals.total}</td>
+    <td data-label="More Cash Total">${totals.moreCash}</td><td data-label="More ATM Total">${totals.moreATM}</td><td data-label="Short Cash Total">${totals.shortCash}</td><td data-label="Short ATM Total">${totals.shortATM}</td>
+    <td data-label="Total Sum" class="${totals.total < 0 ? 'neg' : 'pos'}">${totals.total}</td>
     <td></td>${withActions ? '<td></td>' : ''}
   `;
   tbody.appendChild(totalTr);
@@ -1540,8 +1548,8 @@ async function loadMgrSyncReport(){
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
-      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+      <td data-label="Date">${r.date || ''}</td><td data-label="Shift">${r.shiftLabel || ''}</td><td data-label="Branch">${r.branchName || r.branchSlug || ''}</td>
+      <td data-label="Sync Type">${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td data-label="Time">${fmtClockTime(r.timestamp)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -2083,8 +2091,8 @@ async function loadReportSyncReport(){
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
-      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+      <td data-label="Date">${r.date || ''}</td><td data-label="Shift">${r.shiftLabel || ''}</td><td data-label="Branch">${r.branchName || r.branchSlug || ''}</td>
+      <td data-label="Sync Type">${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td data-label="Time">${fmtClockTime(r.timestamp)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -2112,8 +2120,8 @@ async function loadAdminSyncReport(){
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.date || ''}</td><td>${r.shiftLabel || ''}</td><td>${r.branchName || r.branchSlug || ''}</td>
-      <td>${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td>${fmtClockTime(r.timestamp)}</td>
+      <td data-label="Date">${r.date || ''}</td><td data-label="Shift">${r.shiftLabel || ''}</td><td data-label="Branch">${r.branchName || r.branchSlug || ''}</td>
+      <td data-label="Sync Type">${SYNC_TYPE_LABELS[r.syncType] || r.syncType || ''}</td><td data-label="Time">${fmtClockTime(r.timestamp)}</td>
     `;
     tbody.appendChild(tr);
   });
