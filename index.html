@@ -144,6 +144,17 @@
   th, td{ white-space:normal; word-break:break-word; overflow-wrap:break-word; }
   th{ font-size:9.5px; padding:7px 6px; }
   td{ font-size:11px; padding:6px 6px; }
+
+  /* On phones there isn't enough width to split ~10 columns without breaking
+     words into unreadable single letters — so on small screens go back to the
+     original table: normal columns, no forced wrapping, scroll sideways if needed. */
+  @media (max-width: 700px){
+    .table-wrap{ overflow-x:auto; }
+    table{ table-layout:auto; width:auto; min-width:100%; }
+    th, td{ white-space:nowrap; word-break:normal; overflow-wrap:normal; }
+    th{ font-size:10.5px; padding:8px 9px; }
+    td{ font-size:12px; padding:7px 9px; }
+  }
 </style>
 </head>
 <body>
