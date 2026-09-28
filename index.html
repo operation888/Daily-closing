@@ -1151,6 +1151,27 @@ async function loadCurrentShift(){
   }
 }
 
+// ===== SHIFT LOCK: Morning 3 AM-3 PM, Night 3 PM-3 AM. Open/Close sirf usi shift ke andar =====
+function currentLiveTillId(){
+  const i = getBusinessInfo();
+  return `${currentBranchSlug}_${i.businessDate}_${i.shift}`;
+}
+function branchAppVisible(){
+  return document.getElementById('branchApp').style.display === 'block';
+}
+// Shift badalte hi (3 PM / 3 AM) naya shift apne aap load ho jaye
+setInterval(()=>{
+  if(branchAppVisible() && currentTillId && currentLiveTillId() !== currentTillId){
+    loadCurrentShift();
+    showToast('Shift badal gaya hai — naya shift load ho gaya');
+  }
+}, 5000);
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && branchAppVisible() && currentTillId && currentLiveTillId() !== currentTillId){
+    loadCurrentShift();
+  }
+});
+
 function renderShiftUI(){
   const status = currentTillData ? currentTillData.status : 'not-opened';
   document.getElementById('statusShow').innerHTML = `<span class="status-badge ${status}">${status.replace('-', ' ')}</span>`;
@@ -1189,8 +1210,9 @@ document.getElementById('saveOpenBtn').addEventListener('click', async ()=>{
   const cashVal = parseFloat(document.getElementById('openingCashInput').value);
   if(!name){ showToast('Apna naam daalein', true); return; }
   if(isNaN(cashVal)){ showToast('Opening cash amount daalein', true); return; }
-  if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
+  if(!currentBranchSlug){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
   const info = getBusinessInfo();
+  currentTillId = currentLiveTillId(); // hamesha abhi wale shift me open hoga
   const originalLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Saving...';
@@ -1216,6 +1238,12 @@ document.getElementById('closeBtn').addEventListener('click', async ()=>{
   if(!name){ showToast('Apna naam daalein', true); return; }
   if(isNaN(cashVal)){ showToast('Final cash count daalein', true); return; }
   if(!currentTillId){ showToast('Shift data abhi load ho raha hai, thoda ruk kar dobara try karein', true); return; }
+  // LOCK: shift ka time khatam ho gaya (Morning 3 PM par, Night 3 AM par)
+  if(currentLiveTillId() !== currentTillId){
+    showToast('Is shift ka time khatam ho gaya, till lock ho gaya hai. Admin se contact karein.', true);
+    loadCurrentShift();
+    return;
+  }
   if(!confirm(`Close till with final amount ${cashVal} riyal? This cannot be undone.`)) return;
   const originalLabel = btn.textContent;
   btn.disabled = true;
